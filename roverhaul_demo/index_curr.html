@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ROVERHAUL // Sanctuary Terminal v0.5</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   RESOURCE TABLE — THE ONLY PLACE YOU NEED TO EDIT
+   To add a new resource: copy a row in RESOURCE_TABLE in the
+   <script> section. Everything else auto-generates.
+   ============================================================ */
+:root {
+    --bg-obsidian:#08090c; --bg-console:#0e1117;
+    --bg-card:rgba(22,28,38,0.6); --bg-card-hover:rgba(30,38,51,0.8);
+    --border-color:rgba(0,240,255,0.15); --border-color-glow:rgba(0,240,255,0.4);
+    --color-cyan:#00f0ff; --color-cyan-glow:rgba(0,240,255,0.5);
+    --color-green:#39e65b; --color-green-glow:rgba(57,230,91,0.5);
+    --color-amber:#ffaa00; --color-amber-glow:rgba(255,170,0,0.5);
+    --color-red:#ff3b30; --color-text-dim:#8b9bb4; --color-text-bright:#e2e8f0;
+}
+*{box-sizing:border-box;margin:0;padding:0;user-select:none;}
+body{background:var(--bg-obsidian);color:var(--color-text-bright);font-family:'Inter',sans-serif;height:100vh;overflow:hidden;position:relative;}
+#crt-overlay{display:block;position:absolute;inset:0;background:radial-gradient(circle,rgba(18,24,38,0) 50%,rgba(5,7,10,0.7) 100%);opacity:.8;z-index:100;pointer-events:none;}
+#scanline-overlay{display:block;position:absolute;inset:0;background:linear-gradient(rgba(18,16,16,0) 50%,rgba(0,0,0,0.25) 50%),linear-gradient(90deg,rgba(255,0,0,.06),rgba(0,255,0,.02),rgba(0,0,255,.06));background-size:100% 4px,6px 100%;z-index:99;pointer-events:none;opacity:.6;}
+.app-container{display:grid;grid-template-rows:60px 1fr 200px;height:100vh;width:100vw;background:radial-gradient(ellipse at center,#111622 0%,var(--bg-obsidian) 100%);}
+.terminal-header{background:rgba(14,17,23,.85);border-bottom:1px solid var(--border-color);display:flex;align-items:center;justify-content:space-between;padding:0 20px;backdrop-filter:blur(10px);}
+.header-left{display:flex;align-items:center;gap:12px;}
+.header-left h1{font-family:'Share Tech Mono',monospace;font-size:1.1rem;letter-spacing:2px;color:var(--color-cyan);text-shadow:0 0 8px var(--color-cyan-glow);}
+.system-status{width:8px;height:8px;border-radius:50%;background:var(--color-green);box-shadow:0 0 8px var(--color-green-glow);animation:blink-anim 1.5s infinite alternate;}
+@keyframes blink-anim{0%{opacity:.3}100%{opacity:1}}
+.view-toggles{display:flex;gap:10px;}
+.toggle-btn{background:transparent;border:1px solid var(--border-color);color:var(--color-text-dim);font-family:'Share Tech Mono',monospace;font-size:.85rem;padding:7px 14px;cursor:pointer;border-radius:3px;letter-spacing:1px;transition:all .25s ease;display:flex;align-items:center;gap:6px;}
+.toggle-btn:hover{border-color:var(--color-cyan);color:var(--color-text-bright);background:rgba(0,240,255,.05);}
+.toggle-btn.active{border-color:var(--color-cyan);color:var(--color-cyan);background:rgba(0,240,255,.1);box-shadow:0 0 10px rgba(0,240,255,.15) inset;}
+.pulse-icon{width:6px;height:6px;background:var(--color-red);border-radius:50%;box-shadow:0 0 6px rgba(255,59,48,.6);display:inline-block;animation:blink-anim .8s infinite alternate;}
+.header-right{font-family:'Share Tech Mono',monospace;color:var(--color-text-dim);font-size:.9rem;letter-spacing:1px;}
+.monitor-screen{position:relative;width:100%;height:100%;overflow:hidden;}
+.screen-view{position:absolute;inset:0;opacity:0;pointer-events:none;transition:opacity .3s ease;}
+.screen-view.active{opacity:1;pointer-events:auto;}
+
+/* WASTELAND */
+#screen-wasteland{display:flex;align-items:center;justify-content:center;background:#030608;padding:14px;}
+.canvas-wrapper{position:relative;width:100%;max-width:1400px;height:100%;max-height:560px;margin:auto;overflow:hidden;border:1px solid rgba(57,230,91,.2);box-shadow:0 0 40px rgba(0,0,0,.9),0 0 80px rgba(57,230,91,.04) inset;background:#030a06;}
+#game-canvas{width:100%;height:100%;display:block;}
+.hud-layer{position:absolute;pointer-events:none;z-index:5;font-family:'Share Tech Mono',monospace;}
+.hud-top{top:20px;left:20px;right:20px;display:flex;justify-content:space-between;}
+.hud-stat-box{background:rgba(14,18,26,.75);border:1px solid var(--border-color);padding:8px 16px;border-radius:4px;backdrop-filter:blur(5px);display:flex;flex-direction:column;min-width:150px;}
+.hud-label{font-size:.75rem;color:var(--color-text-dim);letter-spacing:1px;}
+.hud-val{font-size:1.15rem;color:var(--color-cyan);text-shadow:0 0 6px var(--color-cyan-glow);margin-top:4px;}
+.hud-bottom{bottom:25px;left:50%;transform:translateX(-50%);width:50%;min-width:320px;}
+.power-bar-container{background:rgba(14,18,26,.75);border:1px solid var(--border-color);padding:10px 16px;border-radius:4px;backdrop-filter:blur(5px);}
+.power-bar-label{display:flex;justify-content:space-between;font-size:.8rem;color:var(--color-text-dim);margin-bottom:6px;letter-spacing:1px;}
+.power-bar-track{height:10px;background:rgba(255,255,255,.05);border-radius:2px;overflow:hidden;border:1px solid rgba(255,255,255,.1);}
+.power-bar-fill{height:100%;width:100%;background:linear-gradient(90deg,#ffaa00,#ffea00);box-shadow:0 0 8px rgba(255,170,0,.6);transition:width .1s linear;}
+.power-bar-fill.critical{background:linear-gradient(90deg,#ff3b30,#ff7b70);box-shadow:0 0 8px rgba(255,59,48,.6);}
+.hud-state{top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;}
+.hud-state-text{font-size:2.5rem;letter-spacing:6px;color:rgba(255,170,0,.15);border:2px solid rgba(255,170,0,.08);padding:15px 40px;border-radius:4px;text-transform:uppercase;animation:glitch-flicker 4s infinite alternate;}
+@keyframes glitch-flicker{0%,95%,98%{opacity:.15;border-color:rgba(255,170,0,.08);color:rgba(255,170,0,.15);}96%,99%{opacity:.5;border-color:var(--color-amber);color:var(--color-amber);text-shadow:0 0 10px var(--color-amber-glow);}}
+.hud-hint{position:absolute;bottom:85px;left:50%;transform:translateX(-50%);font-family:'Share Tech Mono',monospace;font-size:.85rem;color:var(--color-amber);background:rgba(0,0,0,.7);padding:6px 16px;border-radius:4px;border:1px solid rgba(255,170,0,.3);letter-spacing:1px;pointer-events:none;z-index:5;animation:blink-anim 1s infinite alternate;}
+.hud-hint.hidden{display:none;}
+
+/* BASE OPERATIONS */
+#screen-base{padding:20px;background:rgba(8,9,12,.95);overflow-y:auto;}
+.base-layout{display:flex;flex-direction:column;height:100%;max-width:1400px;margin:0 auto;gap:20px;}
+.base-tabs{display:flex;border-bottom:1px solid var(--border-color);gap:10px;}
+.tab-btn{background:transparent;border:1px solid transparent;border-bottom:none;color:var(--color-text-dim);padding:10px 20px;font-family:'Share Tech Mono',monospace;font-size:.9rem;cursor:pointer;border-radius:4px 4px 0 0;letter-spacing:1px;transition:all .2s ease;}
+.tab-btn:hover{color:var(--color-text-bright);background:rgba(255,255,255,.03);}
+.tab-btn.active{color:var(--color-cyan);border-color:var(--border-color);background:var(--bg-console);box-shadow:0 -2px 0 var(--color-cyan);}
+.tab-content{display:none;flex-grow:1;background:var(--bg-console);border:1px solid var(--border-color);border-top:none;padding:20px;min-height:400px;border-radius:0 0 4px 4px;overflow-y:auto;max-height:calc(100vh - 340px);}
+.tab-content.active{display:block;}
+
+/* HANGAR */
+.hangar-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;}
+.upgrade-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:4px;padding:18px;display:flex;flex-direction:column;gap:12px;transition:all .25s ease;}
+.upgrade-card:hover{background:var(--bg-card-hover);border-color:var(--border-color-glow);transform:translateY(-2px);}
+.upgrade-card-header{display:flex;justify-content:space-between;align-items:center;}
+.upgrade-card-header h3{font-size:1rem;font-weight:600;}
+.upgrade-level{font-family:'Share Tech Mono',monospace;color:var(--color-cyan);font-size:.85rem;background:rgba(0,240,255,.1);padding:2px 8px;border-radius:3px;}
+.upgrade-desc{font-size:.82rem;color:var(--color-text-dim);line-height:1.5;min-height:36px;}
+.upgrade-stats{background:rgba(8,9,12,.4);border:1px solid rgba(255,255,255,.05);padding:10px;border-radius:3px;font-family:'Share Tech Mono',monospace;font-size:.82rem;display:flex;justify-content:space-between;}
+.upgrade-stats span{color:var(--color-cyan);}
+.upgrade-btn{background:rgba(0,240,255,.1);border:1px solid var(--color-cyan);color:var(--color-cyan);font-family:'Share Tech Mono',monospace;font-size:.9rem;padding:10px;border-radius:3px;cursor:pointer;transition:all .2s ease;margin-top:auto;}
+.upgrade-btn:hover:not(:disabled){background:var(--color-cyan);color:#000;box-shadow:0 0 10px var(--color-cyan-glow);}
+.upgrade-btn:disabled{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1);color:rgba(255,255,255,.2);cursor:not-allowed;}
+
+/* CARGO BAY */
+.cargo-section-title{font-family:'Share Tech Mono',monospace;font-size:.75rem;letter-spacing:3px;color:var(--color-text-dim);text-transform:uppercase;margin:0 0 12px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.06);}
+.cargo-category{margin-bottom:28px;}
+.cargo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;}
+.cargo-card{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.07);border-radius:4px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;transition:border-color .2s;}
+.cargo-card:hover{border-color:rgba(255,255,255,.18);}
+.cargo-card-name{font-size:.78rem;color:var(--color-text-dim);letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cargo-card-qty{font-family:'Share Tech Mono',monospace;font-size:1.3rem;font-weight:600;}
+.cargo-card-tier{font-size:.7rem;letter-spacing:1px;padding:1px 6px;border-radius:2px;display:inline-block;width:fit-content;}
+.tier-raw{color:#94a3b8;background:rgba(148,163,184,.1);border:1px solid rgba(148,163,184,.2);}
+.tier-refined{color:var(--color-cyan);background:rgba(0,240,255,.07);border:1px solid rgba(0,240,255,.2);}
+.tier-exotic{color:#c084fc;background:rgba(192,132,252,.07);border:1px solid rgba(192,132,252,.2);}
+.tier-biomech{color:var(--color-green);background:rgba(57,230,91,.07);border:1px solid rgba(57,230,91,.2);}
+.cargo-bar{height:3px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden;}
+.cargo-bar-fill{height:100%;border-radius:2px;transition:width .4s ease;}
+
+/* REFINERY */
+.refinery-layout{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;margin-bottom:22px;}
+.refinery-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:4px;padding:18px;display:flex;flex-direction:column;gap:12px;}
+.refinery-card-header{display:flex;justify-content:space-between;align-items:center;}
+.refinery-card-header h2{font-size:1rem;font-weight:600;}
+.refinery-badge{font-family:'Share Tech Mono',monospace;font-size:.7rem;color:var(--color-green);border:1px solid var(--color-green);padding:1px 6px;border-radius:3px;letter-spacing:1px;}
+.refinery-card p{font-size:.82rem;color:var(--color-text-dim);line-height:1.4;}
+.refinery-inventory{background:rgba(8,9,12,.4);border:1px solid rgba(255,255,255,.05);padding:10px 12px;border-radius:3px;display:flex;flex-direction:column;gap:6px;font-size:.85rem;}
+.inv-row{display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;}
+.action-btn{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.15);color:var(--color-text-bright);font-family:'Share Tech Mono',monospace;font-size:.85rem;padding:9px;border-radius:3px;cursor:pointer;transition:all .2s ease;}
+.action-btn:hover:not(:disabled){background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.3);}
+.action-btn:disabled{opacity:.4;cursor:not-allowed;}
+.refinery-bar-container{height:5px;background:rgba(0,0,0,.4);border-radius:3px;overflow:hidden;}
+.refinery-bar-fill{height:100%;width:0%;background:var(--color-cyan);box-shadow:0 0 6px var(--color-cyan-glow);transition:width .1s linear;}
+.auto-refinery-section{border-top:1px solid rgba(255,255,255,.06);padding-top:18px;}
+.auto-refinery-section h2{font-size:1rem;margin-bottom:12px;font-family:'Share Tech Mono',monospace;letter-spacing:1px;}
+.auto-refinery-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;}
+.auto-card{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:4px;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.auto-card h4{font-size:.88rem;font-weight:600;}
+.auto-card p{font-size:.72rem;color:var(--color-text-dim);margin-top:2px;}
+.upgrade-btn-small{background:rgba(57,230,91,.1);border:1px solid var(--color-green);color:var(--color-green);font-family:'Share Tech Mono',monospace;font-size:.78rem;padding:5px 10px;border-radius:3px;cursor:pointer;transition:all .2s ease;white-space:nowrap;}
+.upgrade-btn-small:hover:not(:disabled){background:var(--color-green);color:#000;}
+.upgrade-btn-small:disabled{background:rgba(255,255,255,.03);border-color:rgba(255,255,255,.08);color:rgba(255,255,255,.15);cursor:not-allowed;}
+
+/* ARCHIVES */
+.archives-layout{display:grid;grid-template-columns:260px 1fr;gap:20px;height:100%;}
+.archives-sidebar{border-right:1px solid rgba(255,255,255,.08);padding-right:15px;}
+.archive-list{list-style:none;display:flex;flex-direction:column;gap:8px;}
+.archive-item{font-family:'Share Tech Mono',monospace;font-size:.82rem;padding:9px 12px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:3px;cursor:pointer;color:var(--color-text-dim);transition:all .2s ease;}
+.archive-item:hover:not(.locked){color:var(--color-text-bright);background:rgba(0,240,255,.03);border-color:rgba(0,240,255,.15);}
+.archive-item.active{color:var(--color-cyan);background:rgba(0,240,255,.08);border-color:var(--color-cyan);}
+.archive-item.locked{color:rgba(255,255,255,.15);cursor:not-allowed;background:rgba(0,0,0,.2);border-color:transparent;}
+.archive-viewer{padding-left:10px;overflow-y:auto;max-height:420px;}
+.archive-entry h2{font-family:'Share Tech Mono',monospace;color:var(--color-cyan);font-size:1.2rem;margin-bottom:6px;letter-spacing:1px;}
+.archive-entry .timestamp{font-family:'Share Tech Mono',monospace;font-size:.78rem;color:var(--color-amber);margin-bottom:16px;}
+.archive-entry p{font-size:.88rem;color:var(--color-text-dim);line-height:1.6;margin-bottom:12px;}
+.archive-entry em{color:var(--color-text-bright);font-style:normal;font-weight:600;}
+.archive-entry.hidden{display:none;}
+
+/* DEV EDITOR */
+#tab-devtools{background:#04060a;}
+.dev-section-title{font-family:'Share Tech Mono',monospace;font-size:.72rem;letter-spacing:3px;color:var(--color-amber);text-transform:uppercase;margin:0 0 10px;padding-bottom:5px;border-bottom:1px solid rgba(255,170,0,.15);}
+.dev-warning{font-family:'Share Tech Mono',monospace;font-size:.78rem;color:rgba(255,59,48,.8);background:rgba(255,59,48,.06);border:1px solid rgba(255,59,48,.2);border-radius:3px;padding:8px 12px;margin-bottom:16px;letter-spacing:.5px;}
+.dev-table{width:100%;border-collapse:collapse;font-family:'Share Tech Mono',monospace;font-size:.8rem;margin-bottom:20px;}
+.dev-table th{text-align:left;padding:7px 10px;font-size:.68rem;letter-spacing:2px;color:var(--color-text-dim);border-bottom:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.3);}
+.dev-table td{padding:5px 4px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:middle;}
+.dev-table tr:hover td{background:rgba(255,255,255,.02);}
+.dev-input{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--color-text-bright);font-family:'Share Tech Mono',monospace;font-size:.8rem;padding:4px 8px;border-radius:2px;width:100%;}
+.dev-input:focus{outline:none;border-color:var(--color-cyan);background:rgba(0,240,255,.04);}
+.dev-input[type=number]{width:70px;}
+.dev-select{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--color-text-bright);font-family:'Share Tech Mono',monospace;font-size:.78rem;padding:4px 6px;border-radius:2px;}
+.dev-select:focus{outline:none;border-color:var(--color-amber);}
+.dev-apply-btn{background:rgba(255,170,0,.15);border:1px solid var(--color-amber);color:var(--color-amber);font-family:'Share Tech Mono',monospace;font-size:.78rem;padding:4px 10px;border-radius:2px;cursor:pointer;white-space:nowrap;}
+.dev-apply-btn:hover{background:var(--color-amber);color:#000;}
+.dev-add-btn{background:rgba(57,230,91,.12);border:1px solid var(--color-green);color:var(--color-green);font-family:'Share Tech Mono',monospace;font-size:.8rem;padding:6px 14px;border-radius:3px;cursor:pointer;margin-bottom:12px;}
+.dev-add-btn:hover{background:var(--color-green);color:#000;}
+.dev-del-btn{background:rgba(255,59,48,.1);border:1px solid var(--color-red);color:var(--color-red);font-family:'Share Tech Mono',monospace;font-size:.72rem;padding:3px 8px;border-radius:2px;cursor:pointer;}
+.dev-del-btn:hover{background:var(--color-red);color:#fff;}
+.dev-give-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px;}
+.dev-give-row label{font-family:'Share Tech Mono',monospace;font-size:.78rem;color:var(--color-text-dim);}
+
+/* BOTTOM BAR */
+.bottom-bar{background:#090c10;border-top:1px solid var(--border-color);display:grid;grid-template-columns:1fr 1fr 220px;height:100%;}
+.resources-hud{border-right:1px solid rgba(255,255,255,.08);padding:10px 12px;display:flex;flex-direction:column;justify-content:center;gap:5px;overflow-y:auto;}
+.resource-pill{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:3px;padding:4px 10px;display:flex;justify-content:space-between;align-items:center;font-family:'Share Tech Mono',monospace;font-size:.78rem;}
+.resource-pill .label{color:var(--color-text-dim);}
+.resource-pill .value{font-weight:600;color:var(--color-text-bright);}
+.console-panel{display:flex;flex-direction:column;height:100%;padding:8px 12px 12px;overflow:hidden;}
+.console-header{display:flex;justify-content:space-between;align-items:center;font-family:'Share Tech Mono',monospace;font-size:.72rem;color:var(--color-text-dim);margin-bottom:6px;letter-spacing:1px;}
+.clear-btn{background:transparent;border:none;color:var(--color-text-dim);font-family:'Share Tech Mono',monospace;font-size:.72rem;cursor:pointer;}
+.clear-btn:hover{color:var(--color-red);}
+.console-body{background:#050608;border:1px solid rgba(255,255,255,.05);border-radius:3px;flex-grow:1;padding:8px;overflow-y:auto;font-family:'Share Tech Mono',monospace;font-size:.76rem;color:#a8b2c1;display:flex;flex-direction:column;gap:3px;}
+.console-body::-webkit-scrollbar,.archive-viewer::-webkit-scrollbar{width:5px;}
+.console-body::-webkit-scrollbar-thumb,.archive-viewer::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px;}
+.log-line{line-height:1.3;}
+.log-line.system-line{color:var(--color-text-dim);}
+.log-line.exped-line{color:var(--color-cyan);}
+.log-line.harvest-line{color:var(--color-amber);}
+.log-line.danger-line{color:var(--color-red);}
+.log-line.success-line{color:var(--color-green);}
+.exped-controls{border-left:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;justify-content:center;padding:14px;gap:10px;}
+.control-btn{font-family:'Share Tech Mono',monospace;font-size:.9rem;padding:12px;border-radius:4px;cursor:pointer;letter-spacing:1.5px;transition:all .25s ease;border:1px solid transparent;}
+.deploy-btn{background:rgba(57,230,91,.1);border-color:var(--color-green);color:var(--color-green);}
+.deploy-btn:hover:not(:disabled){background:var(--color-green);color:#000;box-shadow:0 0 15px var(--color-green-glow);}
+.recall-btn{background:rgba(255,170,0,.1);border-color:var(--color-amber);color:var(--color-amber);}
+.recall-btn:hover:not(:disabled){background:var(--color-amber);color:#000;box-shadow:0 0 15px var(--color-amber-glow);}
+.control-btn:disabled{background:rgba(255,255,255,.02)!important;border-color:rgba(255,255,255,.05)!important;color:rgba(255,255,255,.12)!important;cursor:not-allowed!important;box-shadow:none!important;}
+.cyan-text{color:var(--color-cyan)!important;}
+.green-text{color:var(--color-green)!important;}
+</style>
+</head>
+<body>
+<div id="crt-overlay"></div>
+<div id="scanline-overlay"></div>
+<div class="app-container">
+<header class="terminal-header">
+    <div class="header-left"><div class="system-status"></div><h1>SYSTEM: ROVERHAUL_OS_v0.5</h1></div>
+    <div class="view-toggles">
+        <button id="btn-view-wasteland" class="toggle-btn active"><span class="pulse-icon"></span> WASTELAND</button>
+        <button id="btn-view-base" class="toggle-btn">BASE OPS</button>
+    </div>
+    <div class="header-right">UPTIME: <span id="txt-uptime">00:00:00</span></div>
+</header>
+<main class="monitor-screen">
+<!-- WASTELAND -->
+<section id="screen-wasteland" class="screen-view active">
+    <div class="canvas-wrapper">
+        <canvas id="game-canvas"></canvas>
+        <div class="hud-layer hud-top">
+            <div class="hud-stat-box"><span class="hud-label">COORDINATES</span><span class="hud-val" id="hud-txt-distance">0.0m</span></div>
+            <div class="hud-stat-box"><span class="hud-label">SPEED</span><span class="hud-val" id="hud-txt-speed">0.0 m/s</span></div>
+            <div class="hud-stat-box"><span class="hud-label">CARGO</span><span class="hud-val" id="hud-txt-cargo">0 units</span></div>
+        </div>
+        <div class="hud-layer hud-bottom">
+            <div class="power-bar-container">
+                <div class="power-bar-label"><span>POWER CORE</span><span id="hud-txt-power">100%</span></div>
+                <div class="power-bar-track"><div id="hud-power-fill" class="power-bar-fill"></div></div>
+            </div>
+        </div>
+        <div class="hud-layer hud-state"><div class="hud-state-text" id="hud-txt-status">STANDBY</div></div>
+        <div id="active-click-prompt" class="hud-hint hidden">[ CLICK TO ACTIVATE AUXILIARY MINING LASER ]</div>
+    </div>
+</section>
+<!-- BASE OPS -->
+<section id="screen-base" class="screen-view">
+    <div class="base-layout">
+        <div class="base-tabs">
+            <button class="tab-btn active" data-tab="tab-hangar">ROVER HANGAR</button>
+            <button class="tab-btn" data-tab="tab-cargo">CARGO BAY</button>
+            <button class="tab-btn" data-tab="tab-refinery">REFINERY</button>
+            <button class="tab-btn" data-tab="tab-archives">ARCHIVES</button>
+            <button class="tab-btn" data-tab="tab-devtools" style="margin-left:auto;color:rgba(255,59,48,.6);font-size:.75rem;">⚙ DEV</button>
+        </div>
+        <!-- HANGAR -->
+        <div class="tab-content active" id="tab-hangar">
+            <div class="hangar-grid">
+                <div class="upgrade-card">
+                    <div class="upgrade-card-header"><h3>Locomotion System</h3><span class="upgrade-level" id="lvl-treads">Lvl 1</span></div>
+                    <p class="upgrade-desc">Increases rover speed, reducing travel time between encounters.</p>
+                    <div class="upgrade-stats"><div>Now: <span id="stat-treads-curr">3.0 m/s</span></div><div>Next: <span id="stat-treads-next">3.8 m/s</span></div></div>
+                    <button class="upgrade-btn" id="btn-up-treads">UPGRADE: <span id="cost-treads">15</span> Alloy</button>
+                </div>
+                <div class="upgrade-card">
+                    <div class="upgrade-card-header"><h3>Utility Laser</h3><span class="upgrade-level" id="lvl-laser">Lvl 1</span></div>
+                    <p class="upgrade-desc">Improves drill strength, reducing harvest interaction time.</p>
+                    <div class="upgrade-stats"><div>Now: <span id="stat-laser-curr">3.0s</span></div><div>Next: <span id="stat-laser-next">2.5s</span></div></div>
+                    <button class="upgrade-btn" id="btn-up-laser">UPGRADE: <span id="cost-laser">25</span> Alloy</button>
+                </div>
+                <div class="upgrade-card">
+                    <div class="upgrade-card-header"><h3>Chassis Frame</h3><span class="upgrade-level" id="lvl-cargo">Lvl 1</span></div>
+                    <p class="upgrade-desc">Expands cargo bays for more materials per expedition.</p>
+                    <div class="upgrade-stats"><div>Now: <span id="stat-cargo-curr">—</span></div><div>Next: <span id="stat-cargo-next">—</span></div></div>
+                    <button class="upgrade-btn" id="btn-up-cargo">UPGRADE: <span id="cost-cargo">20</span> Alloy</button>
+                </div>
+                <div class="upgrade-card">
+                    <div class="upgrade-card-header"><h3>Power Core</h3><span class="upgrade-level" id="lvl-battery">Lvl 1</span></div>
+                    <p class="upgrade-desc">Expands battery, allowing the rover to travel further.</p>
+                    <div class="upgrade-stats"><div>Now: <span id="stat-battery-curr">200 EP</span></div><div>Next: <span id="stat-battery-next">320 EP</span></div></div>
+                    <button class="upgrade-btn" id="btn-up-battery">UPGRADE: <span id="cost-battery">30</span> Alloy</button>
+                </div>
+            </div>
+        </div>
+        <!-- CARGO BAY -->
+        <div class="tab-content" id="tab-cargo">
+            <div id="cargo-bay-content"></div>
+        </div>
+        <!-- REFINERY -->
+        <div class="tab-content" id="tab-refinery">
+            <div id="refinery-content"></div>
+            <div class="auto-refinery-section">
+                <h2>AUTOMATION MODULES</h2>
+                <div class="auto-refinery-grid">
+                    <div class="auto-card"><div><h4>Auto-Refinery</h4><p>Smelt raw metals every 5s. <span id="lbl-auto-metal">Disabled</span></p></div><button class="upgrade-btn-small" id="btn-auto-metal">Buy: 5 Bio-Fuel</button></div>
+                    <div class="auto-card"><div><h4>Auto-Reclaimer</h4><p>Process biomass every 5s. <span id="lbl-auto-biomatter">Disabled</span></p></div><button class="upgrade-btn-small" id="btn-auto-biomatter">Buy: 5 Bio-Fuel</button></div>
+                </div>
+            </div>
+        </div>
+        <!-- ARCHIVES -->
+        <div class="tab-content" id="tab-archives">
+            <div class="archives-layout">
+                <div class="archives-sidebar">
+                    <ul class="archive-list">
+                        <li class="archive-item active" data-log="log-welcome">System Log // Welcome</li>
+                        <li class="archive-item locked" data-log="log-rusted-ruins" id="log-item-1">100m // Decaying Infrastructure</li>
+                        <li class="archive-item locked" data-log="log-sporelands" id="log-item-2">300m // Flesh Fusions</li>
+                        <li class="archive-item locked" data-log="log-biotowers" id="log-item-3">600m // Megastructures</li>
+                    </ul>
+                </div>
+                <div class="archive-viewer">
+                    <div id="log-welcome" class="archive-entry"><h2>LOG // SYSTEM BOOT</h2><p class="timestamp">UPTIME: 00:00:00</p><p>Colony vessel <em>Sovereign-9</em> has suffered hull fracture. Deploy the rover to gather materials. Refine them into usable resources. Upgrade to survive.</p></div>
+                    <div id="log-rusted-ruins" class="archive-entry hidden"><h2>LOG // RUSTED OUTSKIRTS</h2><p class="timestamp">DISTANCE: 100m</p><p>Decaying iron structures fused with alien soil. The metal appears to have grown rather than been built.</p></div>
+                    <div id="log-sporelands" class="archive-entry hidden"><h2>LOG // FLESH FUSIONS</h2><p class="timestamp">DISTANCE: 300m</p><p>Biology and machine are indistinguishable here. Synthetic nerve pathways decomposed into soil.</p></div>
+                    <div id="log-biotowers" class="archive-entry hidden"><h2>LOG // MEGASTRUCTURE</h2><p class="timestamp">DISTANCE: 600m</p><p>Towers pulsing with bioluminescent currents. Archives encrypted. Push deeper.</p></div>
+                </div>
+            </div>
+        </div>
+        <!-- DEV TOOLS -->
+        <div class="tab-content" id="tab-devtools">
+            <div class="dev-warning">⚠ DEV MODE — Changes apply immediately and persist to save. Remove this tab before shipping.</div>
+            <div class="dev-section-title">Resource Table Editor</div>
+            <p style="font-size:.78rem;color:var(--color-text-dim);margin-bottom:12px;">Edit drill time and yield for any resource node. Changes take effect on the next expedition. Add new resource types here — they auto-appear in Cargo Bay, Refinery, and the game world.</p>
+            <button class="dev-add-btn" id="dev-btn-add">+ Add New Resource</button>
+            <div id="dev-table-wrap"></div>
+            <div class="dev-section-title" style="margin-top:16px;">Give Resources (Testing)</div>
+            <div class="dev-give-row" id="dev-give-row"></div>
+            <div class="dev-section-title" style="margin-top:4px;">Economy Snapshot</div>
+            <div id="dev-economy-snap" style="font-family:'Share Tech Mono',monospace;font-size:.78rem;color:var(--color-text-dim);line-height:1.8;"></div>
+        </div>
+    </div>
+</section>
+</main>
+<footer class="bottom-bar">
+    <div class="resources-hud" id="hud-resources"></div>
+    <div class="console-panel">
+        <div class="console-header"><span>TERMINAL STREAM</span><button class="clear-btn" id="btn-clear-console">CLEAR</button></div>
+        <div class="console-body" id="console-log"><div class="log-line system-line">[00:00:00] SYSTEM INITIALIZED.</div></div>
+    </div>
+    <div class="exped-controls">
+        <button id="btn-control-deploy" class="control-btn deploy-btn">DEPLOY ROVER</button>
+        <button id="btn-control-recall" class="control-btn recall-btn" disabled>RECALL TO SHIP</button>
+    </div>
+</footer>
+</div>
+<script>
+// ══════════════════════════════════════════════════════════════════════
+//  RESOURCE TABLE  ←  THE ONLY PLACE YOU NEED TO EDIT TO ADD RESOURCES
+//
+//  Each entry defines one gatherable resource node in the world.
+//  Fields:
+//    id         Unique key. Used for inventory storage. No spaces.
+//    name       Display name shown in UI
+//    category   Grouping in Cargo Bay. Use any string you like.
+//    tier       Visual tier badge: 'raw' | 'refined' | 'exotic' | 'biomech'
+//    color      Hex colour used for the in-world obstacle and cargo card bar
+//    drillTime  Base seconds to harvest this node (before laser upgrades)
+//    yieldMin   Minimum units gained per harvest
+//    yieldMax   Maximum units gained per harvest
+//    weight     Spawn weight — higher = appears more often (relative)
+//    refinesTo  Optional: { id, ratio } — X of this makes 1 of another resource
+//               Set to null if this resource doesn't refine into anything
+//    obsShape   Which canvas shape to draw: 'heap'|'cyst'|'crystal'|'shard'|'node'
+//
+//  TO ADD A RESOURCE: copy any row and change the fields.
+//  TO DISABLE A RESOURCE: set weight to 0.
+// ══════════════════════════════════════════════════════════════════════
+let RESOURCE_TABLE = [
+    // ── TIER 1: RUSTED INDUSTRIAL METALS ──
+    { id:'iron_scrap',    name:'Iron Scrap',          category:'Rusted Metals',  tier:'raw',     color:'#7a8fa6', drillTime:2.5, yieldMin:4, yieldMax:8,  weight:30, refinesTo:{ id:'refined_iron',   ratio:8  }, obsShape:'heap'    },
+    { id:'copper_scrap',  name:'Copper Scrap',        category:'Rusted Metals',  tier:'raw',     color:'#c87a00', drillTime:3.0, yieldMin:3, yieldMax:6,  weight:25, refinesTo:{ id:'tempered_copper',ratio:10 }, obsShape:'heap'    },
+    { id:'steel_plate',   name:'Steel Plate',         category:'Rusted Metals',  tier:'raw',     color:'#8899aa', drillTime:4.0, yieldMin:2, yieldMax:5,  weight:18, refinesTo:{ id:'struct_steel',   ratio:6  }, obsShape:'shard'   },
+    { id:'aluminium_can', name:'Aluminium Salvage',   category:'Rusted Metals',  tier:'raw',     color:'#aabfcc', drillTime:2.0, yieldMin:5, yieldMax:10, weight:22, refinesTo:{ id:'ind_aluminium',  ratio:12 }, obsShape:'heap'    },
+    // ── TIER 1 REFINED ──
+    { id:'refined_iron',  name:'Refined Iron',        category:'Refined Metals', tier:'refined', color:'#00f0ff', drillTime:0,   yieldMin:0, yieldMax:0,  weight:0,  refinesTo:null,                              obsShape:'heap'    },
+    { id:'tempered_copper',name:'Tempered Copper',    category:'Refined Metals', tier:'refined', color:'#ffaa44', drillTime:0,   yieldMin:0, yieldMax:0,  weight:0,  refinesTo:null,                              obsShape:'heap'    },
+    { id:'struct_steel',  name:'Structural Steel',    category:'Refined Metals', tier:'refined', color:'#aaccff', drillTime:0,   yieldMin:0, yieldMax:0,  weight:0,  refinesTo:null,                              obsShape:'heap'    },
+    { id:'ind_aluminium', name:'Industrial Aluminium',category:'Refined Metals', tier:'refined', color:'#cce4ff', drillTime:0,   yieldMin:0, yieldMax:0,  weight:0,  refinesTo:null,                              obsShape:'heap'    },
+    // ── TIER 1: ORGANIC / BIOMASS ──
+    { id:'raw_biomatter', name:'Raw Biomatter',       category:'Organic Matter', tier:'raw',     color:'#39e65b', drillTime:3.5, yieldMin:3, yieldMax:7,  weight:25, refinesTo:{ id:'biofuel',        ratio:10 }, obsShape:'cyst'    },
+    { id:'spore_cluster', name:'Spore Cluster',       category:'Organic Matter', tier:'raw',     color:'#a3e635', drillTime:2.5, yieldMin:4, yieldMax:8,  weight:18, refinesTo:{ id:'biofuel',        ratio:15 }, obsShape:'cyst'    },
+    // ── TIER 1 REFINED ORGANIC ──
+    { id:'biofuel',       name:'Bio-Fuel Cell',       category:'Refined Organics',tier:'refined',color:'#4ade80', drillTime:0,   yieldMin:0, yieldMax:0,  weight:0,  refinesTo:null,                              obsShape:'cyst'    },
+    // ── TIER 2: EXOTIC ALIEN (placeholder — unlock later) ──
+    { id:'void_ore',      name:'Void-Tempered Ore',   category:'Exotic Minerals',tier:'exotic',  color:'#c084fc', drillTime:6.0, yieldMin:1, yieldMax:3,  weight:0,  refinesTo:{ id:'void_alloy',     ratio:5  }, obsShape:'crystal' },
+    { id:'luminium',      name:'Luminescent Ore',     category:'Exotic Minerals',tier:'exotic',  color:'#e879f9', drillTime:8.0, yieldMin:1, yieldMax:2,  weight:0,  refinesTo:null,                              obsShape:'crystal' },
+    { id:'void_alloy',    name:'Void Alloy',          category:'Exotic Refined', tier:'exotic',  color:'#a855f7', drillTime:0,   yieldMin:0, yieldMax:0,  weight:0,  refinesTo:null,                              obsShape:'crystal' },
+    // ── TIER 3: BIOMECHANICAL (placeholder — unlock much later) ──
+    { id:'living_metal',  name:'Living Metal Strand', category:'Biomechanical',  tier:'biomech', color:'#39e65b', drillTime:12,  yieldMin:1, yieldMax:2,  weight:0,  refinesTo:null,                              obsShape:'node'    },
+];
+
+// ══════════════════════════════════════════════════════════════════════
+//  GAME STATE
+// ══════════════════════════════════════════════════════════════════════
+const STATE = {
+    inventory: {},          // { resourceId: amount }  — auto-populated from table
+    upgrades: { treads:1, laser:1, cargo:1, battery:1 },
+    automation: { autoMetal:false, autoBiomatter:false },
+    expedition: {
+        active:false, status:'STANDBY', distance:0, power:0,
+        cargo:{},           // { resourceId: amount } gathered this run
+        obstacle:null, nextObstacleDist:0, recallTimeLeft:0, activeDrills:[]
+    },
+    uptime:0, totalDistance:0,
+    autoMetalAcc:0, autoBiomatterAcc:0,
+    unlockedMilestones:{ m100:false, m300:false, m600:false }
+};
+
+// Initialise inventory slots from table
+function initInventory() {
+    RESOURCE_TABLE.forEach(r => { if (STATE.inventory[r.id] === undefined) STATE.inventory[r.id] = 0; });
+}
+
+const get = {
+    speed:      ()  => 3.0 + (STATE.upgrades.treads  - 1) * 0.8,
+    maxPower:   ()  => { const l=[0,200,320,480,700,950,1300,1700,2200,2800]; return STATE.upgrades.battery < l.length ? l[STATE.upgrades.battery] : 2800 + (STATE.upgrades.battery-9)*400; },
+    drillMult:  ()  => 1.0 + (STATE.upgrades.laser   - 1) * 0.35,
+    totalCargo: ()  => Object.values(STATE.expedition.cargo).reduce((a,b)=>a+b,0),
+    upgradeCost:(t) => { const b={treads:15,laser:25,cargo:20,battery:30}; const m={treads:1.5,laser:1.6,cargo:1.5,battery:1.55}; return Math.floor(b[t]*Math.pow(m[t],STATE.upgrades[t]-1)); },
+    // Helper: how many alloys/refined metals exist (for upgrade costs)
+    alloys:     ()  => (STATE.inventory['refined_iron']||0) + (STATE.inventory['struct_steel']||0) + (STATE.inventory['tempered_copper']||0) + (STATE.inventory['ind_aluminium']||0),
+    biofuel:    ()  => STATE.inventory['biofuel']||0,
+};
+
+// Weighted random resource pick from active (weight>0) nodes
+function pickObstacleType() {
+    const pool = RESOURCE_TABLE.filter(r => r.weight > 0 && r.drillTime > 0);
+    if (!pool.length) return RESOURCE_TABLE.find(r=>r.id==='iron_scrap') || RESOURCE_TABLE[0];
+    const total = pool.reduce((a,r)=>a+r.weight,0);
+    let rng = Math.random()*total;
+    for (const r of pool) { rng -= r.weight; if (rng <= 0) return r; }
+    return pool[pool.length-1];
+}
+
+function spawnObstacle() {
+    const def = pickObstacleType();
+    const baseTime = def.drillTime / get.drillMult();
+    STATE.expedition.obstacle = { def, maxTime:baseTime, timeLeft:baseTime };
+}
+
+function deployRover() {
+    if (STATE.expedition.active) return;
+    STATE.expedition.active=true; STATE.expedition.status='DRIVING';
+    STATE.expedition.distance=0; STATE.expedition.power=get.maxPower();
+    STATE.expedition.cargo={};
+    STATE.expedition.nextObstacleDist = 35 + Math.random()*10;
+    spawnObstacle();
+    addLog("DEPLOY: Rover deployed to Wasteland.","exped");
+}
+
+function recallRover() {
+    if (!STATE.expedition.active || STATE.expedition.status==='RECALLING') return;
+    STATE.expedition.status='RECALLING'; STATE.expedition.recallTimeLeft=4.0;
+    addLog("RECALL: Retrieval cable engaged.","danger");
+}
+
+function clearObstacle() {
+    const obs = STATE.expedition.obstacle; if (!obs) return;
+    const def = obs.def;
+    const qty = def.yieldMin + Math.floor(Math.random()*(def.yieldMax - def.yieldMin + 1));
+    STATE.expedition.cargo[def.id] = (STATE.expedition.cargo[def.id]||0) + qty;
+    addLog(`HARVEST: Cleared ${def.name}. +${qty} collected.`,'harvest');
+    STATE.expedition.obstacle=null; STATE.expedition.status='DRIVING';
+    STATE.expedition.nextObstacleDist = STATE.expedition.distance + (35 + Math.random()*15);
+    spawnObstacle();
+}
+
+function tick(dt) {
+    STATE.uptime += dt;
+    // Auto-refinery: smelt raw metals
+    if (STATE.automation.autoMetal) {
+        STATE.autoMetalAcc += dt;
+        if (STATE.autoMetalAcc >= 5) {
+            STATE.autoMetalAcc -= 5;
+            RESOURCE_TABLE.filter(r=>r.refinesTo && r.weight>0).forEach(r=>{
+                const have = STATE.inventory[r.id]||0;
+                const ratio = r.refinesTo.ratio;
+                if (have >= ratio) { STATE.inventory[r.id]-=ratio; STATE.inventory[r.refinesTo.id]=(STATE.inventory[r.refinesTo.id]||0)+1; }
+            });
+        }
+    }
+    // Auto-reclaimer: process biomass
+    if (STATE.automation.autoBiomatter) {
+        STATE.autoBiomatterAcc += dt;
+        if (STATE.autoBiomatterAcc >= 5) {
+            STATE.autoBiomatterAcc -= 5;
+            RESOURCE_TABLE.filter(r=>r.category==='Organic Matter'&&r.refinesTo).forEach(r=>{
+                const have=STATE.inventory[r.id]||0; const ratio=r.refinesTo.ratio;
+                if (have>=ratio){STATE.inventory[r.id]-=ratio;STATE.inventory[r.refinesTo.id]=(STATE.inventory[r.refinesTo.id]||0)+1;}
+            });
+        }
+    }
+    if (!STATE.expedition.active) return;
+    const exp = STATE.expedition;
+    if (exp.status==='DRIVING') {
+        exp.distance += get.speed()*dt; STATE.totalDistance += get.speed()*dt;
+        exp.power -= 0.30*dt;
+        if (exp.power<=0) { exp.power=0; addLog("ALARM: Power depleted. Emergency recall.","danger"); recallRover(); return; }
+        if (exp.distance >= exp.nextObstacleDist) {
+            exp.status='HARVESTING';
+            addLog(`SCAN: ${exp.obstacle?.def.name||'Obstacle'} detected. Deploying drill.`,"harvest");
+        }
+    } else if (exp.status==='HARVESTING') {
+        if (exp.obstacle) {
+            exp.power -= 0.05*dt;
+            if (exp.power<=0) { exp.power=0; addLog("ALARM: Power depleted during drill. Recalling.","danger"); recallRover(); return; }
+            exp.obstacle.timeLeft -= dt;
+            if (exp.obstacle.timeLeft<=0) clearObstacle();
+        }
+    } else if (exp.status==='RECALLING') {
+        exp.recallTimeLeft -= dt;
+        if (exp.recallTimeLeft<=0) {
+            // Deposit cargo into inventory
+            Object.entries(exp.cargo).forEach(([id,qty])=>{ STATE.inventory[id]=(STATE.inventory[id]||0)+qty; });
+            const summary = Object.entries(exp.cargo).map(([id,q])=>{ const r=RESOURCE_TABLE.find(x=>x.id===id); return `${r?.name||id} x${q}`; }).join(', ');
+            exp.active=false; exp.status='STANDBY'; exp.distance=0; exp.cargo={} ; exp.obstacle=null;
+            addLog(`DOCK: Rover returned. ${summary||'No cargo.'}`, "success");
+            saveGame();
+        }
+    }
+    // Milestone unlocks
+    if (!STATE.unlockedMilestones.m100&&STATE.totalDistance>=100){STATE.unlockedMilestones.m100=true;document.getElementById('log-item-1').classList.remove('locked');addLog("ARCHIVE UNLOCKED: 100m log decrypted.","success");}
+    if (!STATE.unlockedMilestones.m300&&STATE.totalDistance>=300){STATE.unlockedMilestones.m300=true;document.getElementById('log-item-2').classList.remove('locked');addLog("ARCHIVE UNLOCKED: 300m log decrypted.","success");}
+    if (!STATE.unlockedMilestones.m600&&STATE.totalDistance>=600){STATE.unlockedMilestones.m600=true;document.getElementById('log-item-3').classList.remove('locked');addLog("ARCHIVE UNLOCKED: 600m log decrypted.","success");}
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  SAVE / LOAD
+// ══════════════════════════════════════════════════════════════════════
+function saveGame() {
+    localStorage.setItem('roverhaul_v3', JSON.stringify({
+        inventory:STATE.inventory, upgrades:STATE.upgrades, automation:STATE.automation,
+        uptime:STATE.uptime, totalDistance:STATE.totalDistance,
+        resourceTable: RESOURCE_TABLE.map(r=>({ id:r.id, drillTime:r.drillTime, yieldMin:r.yieldMin, yieldMax:r.yieldMax, weight:r.weight }))
+    }));
+}
+function loadGame() {
+    try {
+        const d=JSON.parse(localStorage.getItem('roverhaul_v3')); if(!d)return;
+        if(d.inventory) Object.assign(STATE.inventory,d.inventory);
+        if(d.upgrades)  Object.assign(STATE.upgrades,d.upgrades);
+        if(d.automation)Object.assign(STATE.automation,d.automation);
+        STATE.uptime=Number(d.uptime)||0; STATE.totalDistance=Number(d.totalDistance)||0;
+        // Restore any saved overrides to resource table
+        if(d.resourceTable) d.resourceTable.forEach(saved=>{
+            const r=RESOURCE_TABLE.find(x=>x.id===saved.id);
+            if(r){ r.drillTime=saved.drillTime; r.yieldMin=saved.yieldMin; r.yieldMax=saved.yieldMax; r.weight=saved.weight; }
+        });
+    } catch(e){console.warn('Save load failed');}
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  CANVAS ENGINE
+// ══════════════════════════════════════════════════════════════════════
+const canvas=document.getElementById('game-canvas');
+const ctx=canvas.getContext('2d');
+const PX_PER_M=80, FTILE=200, ROVER_X=150;
+let bgO1=0,bgO2=0,bgO3=0,animT=0,wheelRot=0,particles=[],spores=[];
+
+function initSpores(){
+    spores=[];
+    for(let i=0;i<40;i++) spores.push({x:Math.random()*1400,y:Math.random()*600,sy:-(0.2+Math.random()*0.5),sx:-(0.1+Math.random()*0.4),size:1+Math.random()*3,op:0.1+Math.random()*0.5,ps:1+Math.random()*2});
+}
+function resizeCanvas(){const r=canvas.parentElement.getBoundingClientRect();canvas.width=r.width;canvas.height=r.height;}
+function spawnSparks(x,y,color='#39e65b'){for(let i=0;i<6+Math.floor(Math.random()*5);i++){const a=Math.random()*Math.PI*2,sp=2+Math.random()*4;particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-1,life:0.4+Math.random()*0.4,maxLife:0.8,size:1+Math.random()*3,color});}}
+
+function engineUpdate(dt){
+    animT+=dt;
+    let scrollSpd=0;
+    if(STATE.expedition.active){if(STATE.expedition.status==='DRIVING')scrollSpd=get.speed();else if(STATE.expedition.status==='RECALLING')scrollSpd=-get.speed()*4;}
+    bgO1=(bgO1+scrollSpd*10*dt)%1200; bgO2=(bgO2+scrollSpd*30*dt)%1200; bgO3=(bgO3+scrollSpd*PX_PER_M*dt)%FTILE;
+    if(STATE.expedition.status==='DRIVING')wheelRot+=get.speed()*dt*2;
+    else if(STATE.expedition.status==='RECALLING')wheelRot-=get.speed()*dt*8;
+    for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.x+=p.vx;p.y+=p.vy;p.life-=dt;if(p.life<=0)particles.splice(i,1);}
+    if(STATE.expedition.activeDrills.length>0){for(let i=STATE.expedition.activeDrills.length-1;i>=0;i--){const d=STATE.expedition.activeDrills[i];d.life-=dt;if(d.life<=0)STATE.expedition.activeDrills.splice(i,1);else spawnSparks(d.x,d.y,'#ffaa00');}}
+    spores.forEach(s=>{s.y+=s.sy;s.x+=s.sx-(scrollSpd*0.1);if(s.y<0){s.y=canvas.height;s.x=Math.random()*canvas.width;}if(s.x<0){s.x=canvas.width;s.y=Math.random()*canvas.height;}else if(s.x>canvas.width){s.x=0;s.y=Math.random()*canvas.height;}});
+    if(STATE.expedition.status==='HARVESTING'&&STATE.expedition.obstacle&&Math.random()<0.3){const c=STATE.expedition.obstacle.def.color;spawnSparks(ROVER_X+57,canvas.height-110,c);}
+}
+
+function drawWheel(ox,oy,r){
+    ctx.save();ctx.translate(ox,oy);ctx.rotate(wheelRot);
+    ctx.fillStyle='#070c08';ctx.strokeStyle='#2a7a3a';ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.fill();ctx.stroke();
+    ctx.strokeStyle='#39e65b';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-r,0);ctx.lineTo(r,0);ctx.moveTo(0,-r);ctx.lineTo(0,r);ctx.stroke();
+    ctx.fillStyle='#39e65b';ctx.shadowBlur=5;ctx.shadowColor='rgba(57,230,91,.9)';ctx.beginPath();ctx.arc(0,0,3.5,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+    ctx.restore();
+}
+
+function drawRoverBody(gY,atX,moving){
+    let rY=gY-45;
+    if(moving==='DRIVING')rY+=Math.sin(animT*14)*1.5;
+    else if(moving==='RECALLING')rY+=(Math.random()-0.5)*2;
+    ctx.save();ctx.translate(atX,rY);
+    if(moving==='RECALLING')ctx.rotate(-0.04);
+    ctx.strokeStyle='#c87a00';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(-35,30);ctx.lineTo(35,30);ctx.stroke();
+    drawWheel(-35,30,15);drawWheel(0,30,15);drawWheel(35,30,15);
+    const cLvl=STATE.upgrades.cargo,cW=Math.min(35+cLvl*3,60),cH=Math.min(22+cLvl*2,36);
+    ctx.fillStyle='#0a180c';ctx.strokeStyle='#39e65b';ctx.lineWidth=2;ctx.shadowBlur=6;ctx.shadowColor='rgba(57,230,91,.5)';
+    ctx.beginPath();ctx.roundRect(-45,10-cH,cW,cH,3);ctx.fill();ctx.stroke();ctx.shadowBlur=0;
+    const fp=get.totalCargo()/500;
+    if(fp>0.001){ctx.fillStyle='#39e65b';ctx.fillRect(-40,13-cH,(cW-10)*Math.min(fp,1),cH-6);}
+    ctx.fillStyle='#061410';ctx.strokeStyle='#00f0ff';ctx.lineWidth=2.5;ctx.shadowBlur=8;ctx.shadowColor='rgba(0,240,255,.45)';
+    ctx.beginPath();ctx.roundRect(-10,-22,50,42,[5,15,10,5]);ctx.fill();ctx.stroke();ctx.shadowBlur=0;
+    ctx.fillStyle='#041a18';ctx.strokeStyle='rgba(0,210,180,.7)';ctx.lineWidth=1.5;ctx.beginPath();ctx.roundRect(15,-16,20,20,[2,10,5,2]);ctx.fill();ctx.stroke();
+    const sw=0.5+0.5*Math.sin(animT*6);ctx.strokeStyle=`rgba(0,240,255,${0.5+sw*0.5})`;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(15+sw*18,-14);ctx.lineTo(15+sw*18,2);ctx.stroke();
+    const pp=0.6+0.4*Math.sin(animT*8),plvl=STATE.expedition.power/get.maxPower();
+    let cc='#39e65b';if(plvl<0.25)cc='#ff3b30';else if(plvl<0.6)cc='#ffaa00';
+    ctx.fillStyle=cc;ctx.shadowBlur=10*pp;ctx.shadowColor=cc;ctx.beginPath();ctx.arc(5,5,6,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+    ctx.strokeStyle='#ff6ec7';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(40,5);ctx.lineTo(55,12);ctx.stroke();
+    ctx.fillStyle='#200a18';ctx.strokeStyle='#ff6ec7';ctx.lineWidth=2;ctx.fillRect(52,7,8,10);ctx.strokeRect(52,7,8,10);
+    ctx.restore();
+}
+
+// Draw obstacle based on obsShape and resource colour
+function drawObstacleShape(def, gY){
+    const c=def.color;
+    ctx.save();ctx.translate(0,gY-15);ctx.shadowBlur=10;ctx.shadowColor=c+'88';
+    // Fill colour — darker version of resource colour
+    ctx.strokeStyle=c;ctx.lineWidth=2;
+    if(def.obsShape==='heap'){
+        ctx.fillStyle='#0e1a10';
+        ctx.beginPath();ctx.moveTo(0,15);ctx.lineTo(15,-25);ctx.lineTo(45,-20);ctx.lineTo(55,15);ctx.closePath();ctx.fill();ctx.stroke();
+        ctx.strokeStyle=c+'55';ctx.beginPath();ctx.moveTo(10,5);ctx.lineTo(40,-10);ctx.stroke();
+    } else if(def.obsShape==='cyst'){
+        ctx.fillStyle='#0a1a0c';
+        ctx.beginPath();ctx.arc(25,0,20,0,Math.PI,true);ctx.closePath();ctx.fill();ctx.stroke();
+        const bp=0.5+0.5*Math.sin(animT*4);
+        ctx.fillStyle=c+Math.floor(0.3*255*bp).toString(16).padStart(2,'0');
+        ctx.beginPath();ctx.arc(25,-5,10*bp,0,Math.PI*2);ctx.fill();
+    } else if(def.obsShape==='crystal'){
+        ctx.fillStyle='#140a20';
+        ctx.beginPath();ctx.moveTo(25,-40);ctx.lineTo(45,-10);ctx.lineTo(38,15);ctx.lineTo(12,15);ctx.lineTo(5,-10);ctx.closePath();ctx.fill();ctx.stroke();
+        ctx.fillStyle=c+'22';ctx.beginPath();ctx.moveTo(25,-40);ctx.lineTo(35,-5);ctx.lineTo(25,5);ctx.closePath();ctx.fill();
+    } else if(def.obsShape==='shard'){
+        ctx.fillStyle='#10161e';
+        ctx.beginPath();ctx.moveTo(5,15);ctx.lineTo(20,-30);ctx.lineTo(35,-20);ctx.lineTo(55,10);ctx.lineTo(40,15);ctx.closePath();ctx.fill();ctx.stroke();
+    } else { // node
+        ctx.fillStyle='#0a180c';
+        ctx.beginPath();ctx.arc(25,0,22,0,Math.PI*2);ctx.fill();ctx.stroke();
+        const np=0.5+0.5*Math.sin(animT*3);
+        for(let i=0;i<6;i++){const a=i/6*Math.PI*2+animT*0.5;ctx.fillStyle=c+'44';ctx.beginPath();ctx.arc(25+Math.cos(a)*14,Math.sin(a)*14,4,0,Math.PI*2);ctx.fill();}
+        ctx.fillStyle=c;ctx.shadowBlur=15*np;ctx.shadowColor=c;ctx.beginPath();ctx.arc(25,0,7,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+    }
+    ctx.shadowBlur=0;
+    ctx.restore();
+}
+
+function engineRender(){
+    const W=canvas.width,H=canvas.height,gY=H-100;
+    ctx.clearRect(0,0,W,H);
+    // Sky
+    const sg=ctx.createLinearGradient(0,0,0,H);sg.addColorStop(0,'#030a06');sg.addColorStop(0.45,'#071410');sg.addColorStop(1,'#0f1a08');ctx.fillStyle=sg;ctx.fillRect(0,0,W,H);
+    const pulse=0.5+0.3*Math.sin(animT*0.5),pulse2=0.5+0.3*Math.sin(animT*0.37+1.2);
+    const g1=ctx.createRadialGradient(W*.72,H*.22,0,W*.72,H*.22,130);g1.addColorStop(0,`rgba(57,230,91,${0.16*pulse})`);g1.addColorStop(1,'rgba(57,230,91,0)');ctx.fillStyle=g1;ctx.fillRect(0,0,W,H);
+    const g2=ctx.createRadialGradient(W*.18,H*.28,0,W*.18,H*.28,100);g2.addColorStop(0,`rgba(0,210,180,${0.11*pulse2})`);g2.addColorStop(1,'rgba(0,210,180,0)');ctx.fillStyle=g2;ctx.fillRect(0,0,W,H);
+    const g3=ctx.createRadialGradient(W*.92,H*.14,0,W*.92,H*.14,70);g3.addColorStop(0,`rgba(180,120,20,${0.09*pulse})`);g3.addColorStop(1,'rgba(180,120,20,0)');ctx.fillStyle=g3;ctx.fillRect(0,0,W,H);
+    // Distant ruins
+    const rTile=600,rOff=bgO1%rTile,rCount=Math.ceil(W/rTile)+2;
+    ctx.fillStyle='rgba(22,50,32,.60)';
+    for(let i=0;i<rCount;i++){const sx=i*rTile-rOff;ctx.beginPath();ctx.moveTo(sx+100,H-80);ctx.quadraticCurveTo(sx+150,H-350,sx+300,H-80);ctx.lineTo(sx+280,H-80);ctx.quadraticCurveTo(sx+150,H-310,sx+120,H-80);ctx.fill();ctx.fillRect(sx+400,H-300,60,220);ctx.fillRect(sx+450,H-240,40,160);}
+    ctx.strokeStyle=`rgba(57,230,91,${0.10+0.05*pulse})`;ctx.lineWidth=1.5;
+    for(let i=0;i<rCount;i++){const sx=i*rTile-rOff;ctx.beginPath();ctx.moveTo(sx+100,H-80);ctx.quadraticCurveTo(sx+150,H-350,sx+300,H-80);ctx.stroke();ctx.strokeRect(sx+400,H-300,60,220);}
+    // Midground
+    const mTile=600,mOff=bgO2%mTile,mCount=Math.ceil(W/mTile)+2;
+    ctx.fillStyle='rgba(18,44,26,.82)';
+    for(let i=0;i<mCount;i++){const sx=i*mTile-mOff;ctx.fillRect(sx+50,H-220,30,140);ctx.fillRect(sx+200,H-180,50,100);ctx.beginPath();ctx.arc(sx+225,H-180,20,0,Math.PI,true);ctx.fill();}
+    const cp=0.5+0.5*Math.sin(animT*1.2);ctx.strokeStyle=`rgba(57,230,91,${0.22+0.14*cp})`;ctx.lineWidth=2;
+    for(let i=0;i<mCount;i++){const sx=i*mTile-mOff;ctx.beginPath();ctx.moveTo(sx,90);ctx.bezierCurveTo(sx+150,170,sx+450,170,sx+600,90);ctx.stroke();}
+    // Spores
+    spores.forEach(s=>{const a=s.op*(0.6+0.4*Math.sin(animT*s.ps));ctx.fillStyle=`rgba(57,230,91,${a})`;ctx.shadowBlur=s.size*2;ctx.shadowColor='rgba(57,230,91,.8)';ctx.beginPath();ctx.arc(s.x,s.y,s.size,0,Math.PI*2);ctx.fill();});ctx.shadowBlur=0;
+    // Foreground
+    ctx.fillStyle='#060e08';ctx.fillRect(0,gY,W,H-gY);
+    const fOff=bgO3,fCount=Math.ceil(W/FTILE)+2;
+    for(let i=0;i<fCount;i++){const lx=i*FTILE-fOff;ctx.strokeStyle='#0d2012';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(lx,gY);ctx.lineTo(lx,H);ctx.stroke();ctx.fillStyle='#112a16';ctx.beginPath();ctx.arc(lx+50,gY+14,3,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(lx+140,gY+14,3,0,Math.PI*2);ctx.fill();if(i%2===0){ctx.fillStyle='#040905';ctx.fillRect(lx+20,gY-8,12,8);}}
+    const ep=0.6+0.4*Math.sin(animT*2.1);ctx.shadowBlur=8;ctx.shadowColor=`rgba(57,230,91,${0.6*ep})`;ctx.strokeStyle=`rgba(57,230,91,${0.35+0.2*ep})`;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(0,gY);ctx.lineTo(W,gY);ctx.stroke();ctx.shadowBlur=0;
+    // Rover & obstacles
+    if(STATE.expedition.active){
+        if(STATE.expedition.obstacle){
+            const obs=STATE.expedition.obstacle;
+            const metersAhead=Math.max(0,STATE.expedition.nextObstacleDist-STATE.expedition.distance);
+            obs.x=ROVER_X+metersAhead*PX_PER_M;
+            ctx.save();ctx.translate(obs.x,0);
+            drawObstacleShape(obs.def,gY);
+            ctx.restore();
+            if(STATE.expedition.status==='HARVESTING'){
+                ctx.save();ctx.translate(obs.x,gY-15);
+                const bW=60,bH=5,bX=25-bW/2,bY=-45;
+                ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(bX,bY,bW,bH);ctx.strokeStyle='rgba(255,255,255,.2)';ctx.strokeRect(bX,bY,bW,bH);
+                const fp2=Math.max(0,Math.min(1,1-obs.timeLeft/obs.maxTime));
+                ctx.fillStyle=obs.def.color;ctx.fillRect(bX+1,bY+1,(bW-2)*fp2,bH-2);
+                ctx.font='8px "Share Tech Mono"';ctx.fillStyle='#fff';ctx.textAlign='center';ctx.fillText("DRILLING // CLICK BOOST",25,-55);
+                ctx.restore();
+            }
+        }
+        drawRoverBody(gY,ROVER_X,STATE.expedition.status);
+        if(STATE.expedition.status==='HARVESTING'&&STATE.expedition.obstacle){
+            const nX=ROVER_X+57,nY=gY-33,tX=STATE.expedition.obstacle.x,tY=gY-15,j=(Math.random()-0.5)*3,bc=STATE.expedition.obstacle.def.color;
+            ctx.save();ctx.strokeStyle=bc;ctx.lineWidth=5+Math.random()*4;ctx.beginPath();ctx.moveTo(nX,nY);ctx.lineTo(tX,tY+j);ctx.stroke();ctx.strokeStyle='rgba(255,255,255,.8)';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(nX,nY);ctx.lineTo(tX,tY+j);ctx.stroke();ctx.restore();
+        }
+        if(STATE.expedition.status==='RECALLING'){ctx.save();ctx.strokeStyle='#5a8a6a';ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(0,gY-60);ctx.quadraticCurveTo(ROVER_X/2,gY-30,ROVER_X-45,gY-45);ctx.stroke();if(Math.random()<.2)spawnSparks(ROVER_X-45,gY-45,'#ffaa00');ctx.restore();}
+    } else {
+        drawRoverBody(gY,canvas.width/2,'STANDBY');
+    }
+    particles.forEach(p=>{ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,p.size*(p.life/p.maxLife),0,Math.PI*2);ctx.fill();});
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  UI BUILDERS  (auto-generated from RESOURCE_TABLE)
+// ══════════════════════════════════════════════════════════════════════
+
+// CARGO BAY — grouped by category
+function buildCargoBay(){
+    const el=document.getElementById('cargo-bay-content'); el.innerHTML='';
+    const categories={};
+    RESOURCE_TABLE.forEach(r=>{ if(!categories[r.category])categories[r.category]=[]; categories[r.category].push(r); });
+    Object.entries(categories).forEach(([cat,resources])=>{
+        const sec=document.createElement('div'); sec.className='cargo-category';
+        sec.innerHTML=`<div class="cargo-section-title">${cat}</div><div class="cargo-grid" id="cargo-grid-${cat.replace(/\s+/g,'_')}"></div>`;
+        el.appendChild(sec);
+    });
+}
+function updateCargoBay(){
+    const maxQty = Math.max(1,...Object.values(STATE.inventory));
+    RESOURCE_TABLE.forEach(r=>{
+        let card=document.getElementById('cargo-card-'+r.id);
+        if(!card){
+            const grid=document.getElementById('cargo-grid-'+r.category.replace(/\s+/g,'_'));
+            if(!grid)return;
+            card=document.createElement('div'); card.className='cargo-card'; card.id='cargo-card-'+r.id;
+            const tierLabel=r.tier.toUpperCase();
+            card.innerHTML=`<div class="cargo-card-name">${r.name}</div><div class="cargo-card-qty" id="cqty-${r.id}" style="color:${r.color}">0</div><span class="cargo-card-tier tier-${r.tier}">${tierLabel}</span><div class="cargo-bar"><div class="cargo-bar-fill" id="cbar-${r.id}" style="background:${r.color}"></div></div>`;
+            grid.appendChild(card);
+        }
+        const qty=STATE.inventory[r.id]||0;
+        document.getElementById('cqty-'+r.id).textContent=qty;
+        const barEl=document.getElementById('cbar-'+r.id);
+        if(barEl) barEl.style.width=Math.min(100,(qty/Math.max(1,maxQty))*100)+'%';
+    });
+}
+
+// REFINERY — one card per raw resource that refines to something
+function buildRefinery(){
+    const el=document.getElementById('refinery-content'); el.innerHTML='';
+    const grid=document.createElement('div'); grid.className='refinery-layout'; el.appendChild(grid);
+    RESOURCE_TABLE.filter(r=>r.refinesTo).forEach(r=>{
+        const target=RESOURCE_TABLE.find(x=>x.id===r.refinesTo.id);
+        const card=document.createElement('div'); card.className='refinery-card';
+        card.innerHTML=`
+          <div class="refinery-card-header"><h2>${r.name} Processor</h2><span class="refinery-badge">ACTIVE</span></div>
+          <div class="refinery-inventory">
+            <div class="inv-row"><span>${r.name}:</span><strong id="ref-in-${r.id}" style="color:${r.color}">0</strong></div>
+            <div class="inv-row"><span>${target?.name||r.refinesTo.id}:</span><strong id="ref-out-${r.id}" style="color:${target?.color||'#fff'}">0</strong></div>
+          </div>
+          <button class="action-btn" id="btn-refine-${r.id}">Process ${r.refinesTo.ratio}x ${r.name} → 1 ${target?.name||r.refinesTo.id}</button>`;
+        grid.appendChild(card);
+        card.querySelector(`#btn-refine-${r.id}`).addEventListener('click',()=>{
+            if((STATE.inventory[r.id]||0)>=r.refinesTo.ratio){
+                STATE.inventory[r.id]-=r.refinesTo.ratio;
+                STATE.inventory[r.refinesTo.id]=(STATE.inventory[r.refinesTo.id]||0)+1;
+                addLog(`REFINERY: ${r.refinesTo.ratio}x ${r.name} → 1 ${target?.name||r.refinesTo.id}.`,'success');
+                saveGame();
+            }
+        });
+    });
+}
+function updateRefinery(){
+    RESOURCE_TABLE.filter(r=>r.refinesTo).forEach(r=>{
+        const inEl=document.getElementById('ref-in-'+r.id);
+        const outEl=document.getElementById('ref-out-'+r.id);
+        const btn=document.getElementById('btn-refine-'+r.id);
+        if(inEl) inEl.textContent=Math.floor(STATE.inventory[r.id]||0);
+        if(outEl) outEl.textContent=Math.floor(STATE.inventory[r.refinesTo.id]||0);
+        if(btn) btn.disabled=(STATE.inventory[r.id]||0)<r.refinesTo.ratio;
+    });
+}
+
+// HUD BOTTOM BAR — show top-level resources dynamically
+function buildHudResources(){
+    const el=document.getElementById('hud-resources'); el.innerHTML='';
+    // Show first 6 most interesting (non-zero or tier raw/refined)
+    const toShow=RESOURCE_TABLE.filter(r=>r.tier==='raw'||r.tier==='refined').slice(0,8);
+    toShow.forEach(r=>{
+        const pill=document.createElement('div'); pill.className='resource-pill';
+        pill.innerHTML=`<span class="label">${r.name.toUpperCase()}:</span><span class="value" id="hud-res-${r.id}" style="color:${r.color}">0</span>`;
+        el.appendChild(pill);
+    });
+}
+function updateHudResources(){
+    RESOURCE_TABLE.forEach(r=>{
+        const el=document.getElementById('hud-res-'+r.id);
+        if(el) el.textContent=Math.floor(STATE.inventory[r.id]||0);
+    });
+}
+
+// DEV TOOLS — editable resource table
+function buildDevTable(){
+    const wrap=document.getElementById('dev-table-wrap'); wrap.innerHTML='';
+    const table=document.createElement('table'); table.className='dev-table';
+    table.innerHTML=`<thead><tr>
+        <th>ID</th><th>NAME</th><th>CATEGORY</th><th>TIER</th><th>SHAPE</th>
+        <th>DRILL TIME</th><th>YIELD MIN</th><th>YIELD MAX</th><th>WEIGHT</th>
+        <th>REFINES TO</th><th>RATIO</th><th></th></tr></thead>`;
+    const tbody=document.createElement('tbody'); table.appendChild(tbody);
+    RESOURCE_TABLE.forEach((r,i)=>{
+        const tr=document.createElement('tr'); tr.id='devrow-'+r.id;
+        tr.innerHTML=`
+          <td><input class="dev-input" value="${r.id}" data-i="${i}" data-f="id" style="width:120px"></td>
+          <td><input class="dev-input" value="${r.name}" data-i="${i}" data-f="name" style="width:140px"></td>
+          <td><input class="dev-input" value="${r.category}" data-i="${i}" data-f="category" style="width:130px"></td>
+          <td><select class="dev-select" data-i="${i}" data-f="tier">
+            ${['raw','refined','exotic','biomech'].map(t=>`<option value="${t}"${r.tier===t?' selected':''}>${t}</option>`).join('')}
+          </select></td>
+          <td><select class="dev-select" data-i="${i}" data-f="obsShape">
+            ${['heap','cyst','crystal','shard','node'].map(s=>`<option value="${s}"${r.obsShape===s?' selected':''}>${s}</option>`).join('')}
+          </select></td>
+          <td><input class="dev-input" type="number" min="0" step="0.5" value="${r.drillTime}" data-i="${i}" data-f="drillTime"></td>
+          <td><input class="dev-input" type="number" min="0" value="${r.yieldMin}" data-i="${i}" data-f="yieldMin"></td>
+          <td><input class="dev-input" type="number" min="0" value="${r.yieldMax}" data-i="${i}" data-f="yieldMax"></td>
+          <td><input class="dev-input" type="number" min="0" value="${r.weight}" data-i="${i}" data-f="weight"></td>
+          <td><input class="dev-input" value="${r.refinesTo?r.refinesTo.id:''}" data-i="${i}" data-f="refinesToId" style="width:110px" placeholder="resource id"></td>
+          <td><input class="dev-input" type="number" min="1" value="${r.refinesTo?r.refinesTo.ratio:10}" data-i="${i}" data-f="refinesToRatio"></td>
+          <td><button class="dev-del-btn" data-i="${i}">✕</button></td>`;
+        tbody.appendChild(tr);
+    });
+    wrap.appendChild(table);
+
+    // Live-edit listeners
+    wrap.querySelectorAll('.dev-input,.dev-select').forEach(inp=>{
+        inp.addEventListener('change',()=>{
+            const i=+inp.dataset.i, f=inp.dataset.f, v=inp.type==='number'?+inp.value:inp.value;
+            if(f==='refinesToId'||f==='refinesToRatio'){
+                const idInp=wrap.querySelector(`[data-i="${i}"][data-f="refinesToId"]`);
+                const ratioInp=wrap.querySelector(`[data-i="${i}"][data-f="refinesToRatio"]`);
+                const rid=idInp.value.trim(); const ratio=+ratioInp.value||10;
+                RESOURCE_TABLE[i].refinesTo = rid ? {id:rid,ratio} : null;
+            } else { RESOURCE_TABLE[i][f]=v; }
+            initInventory();
+            buildCargoBay(); buildRefinery(); buildHudResources();
+            saveGame();
+        });
+    });
+    wrap.querySelectorAll('.dev-del-btn').forEach(btn=>{
+        btn.addEventListener('click',()=>{
+            const i=+btn.dataset.i;
+            if(confirm(`Delete "${RESOURCE_TABLE[i].name}"?`)){
+                RESOURCE_TABLE.splice(i,1); initInventory();
+                buildDevTable(); buildCargoBay(); buildRefinery(); buildHudResources();
+                saveGame();
+            }
+        });
+    });
+
+    // Give-resources row
+    const giveRow=document.getElementById('dev-give-row'); giveRow.innerHTML='';
+    const sel=document.createElement('select'); sel.className='dev-select'; sel.style.minWidth='160px';
+    RESOURCE_TABLE.forEach(r=>{const o=document.createElement('option');o.value=r.id;o.textContent=r.name;sel.appendChild(o);});
+    const amtInp=document.createElement('input'); amtInp.className='dev-input'; amtInp.type='number'; amtInp.value=50; amtInp.style.width='70px';
+    const giveBtn=document.createElement('button'); giveBtn.className='dev-apply-btn'; giveBtn.textContent='GIVE';
+    giveBtn.addEventListener('click',()=>{
+        const id=sel.value, amt=+amtInp.value||0;
+        STATE.inventory[id]=(STATE.inventory[id]||0)+amt;
+        addLog(`DEV: +${amt} ${RESOURCE_TABLE.find(r=>r.id===id)?.name||id}.`,'system');
+    });
+    const clrBtn=document.createElement('button'); clrBtn.className='dev-del-btn'; clrBtn.textContent='CLEAR ALL';
+    clrBtn.addEventListener('click',()=>{ if(confirm('Clear all inventory?')){ Object.keys(STATE.inventory).forEach(k=>STATE.inventory[k]=0); } });
+    const lbl=document.createElement('label'); lbl.textContent='Amount:';
+    giveRow.append(sel,lbl,amtInp,giveBtn,clrBtn);
+}
+
+function buildDevAdd(){
+    document.getElementById('dev-btn-add').addEventListener('click',()=>{
+        const id='new_resource_'+Date.now();
+        RESOURCE_TABLE.push({ id, name:'New Resource', category:'Rusted Metals', tier:'raw', color:'#888888', drillTime:3, yieldMin:3, yieldMax:6, weight:10, refinesTo:null, obsShape:'heap' });
+        initInventory();
+        buildDevTable(); buildCargoBay(); buildRefinery(); buildHudResources();
+    });
+}
+
+// Economy snapshot in dev panel
+function updateDevSnap(){
+    const snap=document.getElementById('dev-economy-snap'); if(!snap)return;
+    const lines=RESOURCE_TABLE.map(r=>{
+        const qty=STATE.inventory[r.id]||0;
+        const inRun=STATE.expedition.cargo[r.id]||0;
+        return `${r.name.padEnd(25,'·')} inv:${String(qty).padStart(5)} | run:${String(inRun).padStart(4)} | wt:${r.weight} | drill:${r.drillTime}s`;
+    });
+    snap.textContent=lines.join('\n');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  MAIN UI UPDATE
+// ══════════════════════════════════════════════════════════════════════
+function addLog(msg,type='system'){const t=formatTime(STATE.uptime),el=document.getElementById('console-log');const line=document.createElement('div');line.className=`log-line ${type}-line`;line.innerText=`[${t}] ${msg}`;el.appendChild(line);el.scrollTop=el.scrollHeight;if(el.children.length>100)el.removeChild(el.firstChild);}
+function formatTime(s){const h=Math.floor(s/3600).toString().padStart(2,'0'),m=Math.floor((s%3600)/60).toString().padStart(2,'0'),ss=Math.floor(s%60).toString().padStart(2,'0');return`${h}:${m}:${ss}`;}
+
+function updateUI(){
+    document.getElementById('txt-uptime').textContent=formatTime(STATE.uptime);
+    updateHudResources();
+    updateCargoBay();
+    updateRefinery();
+    // Upgrade cards
+    ['treads','laser','cargo','battery'].forEach(t=>{
+        const cost=get.upgradeCost(t);
+        document.getElementById(`lvl-${t}`).textContent=`Lvl ${STATE.upgrades[t]}`;
+        document.getElementById(`cost-${t}`).textContent=cost;
+        document.getElementById(`btn-up-${t}`).disabled=get.alloys()<cost;
+    });
+    document.getElementById('stat-treads-curr').textContent=`${get.speed().toFixed(1)} m/s`;
+    document.getElementById('stat-treads-next').textContent=`${(get.speed()+0.8).toFixed(1)} m/s`;
+    document.getElementById('stat-laser-curr').textContent=`${(3.0/get.drillMult()).toFixed(2)}s`;
+    document.getElementById('stat-laser-next').textContent=`${(3.0/(1.0+STATE.upgrades.laser*0.35)).toFixed(2)}s`;
+    const s1=get.maxPower(),batt=[0,100,140,200,280,380,500,650,820,1000],s2=STATE.upgrades.battery+1<batt.length?batt[STATE.upgrades.battery+1]:s1+50;
+    document.getElementById('stat-battery-curr').textContent=`${s1} EP`;
+    document.getElementById('stat-battery-next').textContent=`${s2} EP`;
+    // Expedition HUD
+    const exp=STATE.expedition;
+    if(exp.active){
+        document.getElementById('btn-control-deploy').disabled=true;document.getElementById('btn-control-deploy').textContent='EXPLORING...';
+        document.getElementById('btn-control-recall').disabled=exp.status==='RECALLING';
+        document.getElementById('btn-control-recall').textContent=exp.status==='RECALLING'?'RECALL ACTIVE':'RECALL TO SHIP';
+        document.getElementById('hud-txt-distance').textContent=`${exp.distance.toFixed(1)}m`;
+        document.getElementById('hud-txt-speed').textContent=exp.status==='DRIVING'?`${get.speed().toFixed(1)} m/s`:exp.status==='HARVESTING'?'0.0 m/s':`-${(get.speed()*4).toFixed(1)} m/s`;
+        document.getElementById('hud-txt-status').textContent={DRIVING:'DRIVING',HARVESTING:'DRILLING TARGET',RECALLING:'RETRIEVAL ACTIVE'}[exp.status]||'ACTIVE';
+        document.getElementById('hud-txt-cargo').textContent=`${get.totalCargo()} units`;
+        const pp=(exp.power/get.maxPower())*100;
+        document.getElementById('hud-txt-power').textContent=`${Math.ceil(pp)}%`;
+        document.getElementById('hud-power-fill').style.width=`${Math.max(0,pp)}%`;
+        document.getElementById('hud-power-fill').classList.toggle('critical',pp<25);
+        document.getElementById('active-click-prompt').classList.toggle('hidden',exp.status!=='HARVESTING');
+    } else {
+        document.getElementById('btn-control-deploy').disabled=false;document.getElementById('btn-control-deploy').textContent='DEPLOY ROVER';
+        document.getElementById('btn-control-recall').disabled=true;document.getElementById('btn-control-recall').textContent='RECALL TO SHIP';
+        document.getElementById('hud-txt-distance').textContent='0.0m';
+        document.getElementById('hud-txt-speed').textContent='STANDBY';
+        document.getElementById('hud-txt-cargo').textContent='0 units';
+        document.getElementById('hud-txt-power').textContent='0%';
+        document.getElementById('hud-power-fill').style.width='0%';
+        document.getElementById('hud-txt-status').textContent='STANDBY';
+        document.getElementById('active-click-prompt').classList.add('hidden');
+    }
+    // Automation buttons
+    if(STATE.automation.autoMetal){document.getElementById('btn-auto-metal').disabled=true;document.getElementById('btn-auto-metal').textContent='ACTIVE';document.getElementById('lbl-auto-metal').innerHTML="<span style='color:var(--color-green)'>ONLINE</span>";}
+    else{document.getElementById('btn-auto-metal').disabled=get.biofuel()<5;document.getElementById('lbl-auto-metal').textContent='Disabled';}
+    if(STATE.automation.autoBiomatter){document.getElementById('btn-auto-biomatter').disabled=true;document.getElementById('btn-auto-biomatter').textContent='ACTIVE';document.getElementById('lbl-auto-biomatter').innerHTML="<span style='color:var(--color-green)'>ONLINE</span>";}
+    else{document.getElementById('btn-auto-biomatter').disabled=get.biofuel()<5;document.getElementById('lbl-auto-biomatter').textContent='Disabled';}
+    // Dev snap (only if visible)
+    if(document.getElementById('tab-devtools').classList.contains('active')) updateDevSnap();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded',()=>{
+    loadGame();
+    initInventory();
+    resizeCanvas(); initSpores();
+    window.addEventListener('resize',resizeCanvas);
+
+    // Build dynamic UI from resource table
+    buildCargoBay();
+    buildRefinery();
+    buildHudResources();
+    buildDevTable();
+    buildDevAdd();
+
+    // Navigation
+    document.getElementById('btn-view-wasteland').addEventListener('click',()=>{
+        document.getElementById('btn-view-wasteland').classList.add('active');document.getElementById('btn-view-base').classList.remove('active');
+        document.getElementById('screen-wasteland').classList.add('active');document.getElementById('screen-base').classList.remove('active');
+        resizeCanvas();
+    });
+    document.getElementById('btn-view-base').addEventListener('click',()=>{
+        document.getElementById('btn-view-base').classList.add('active');document.getElementById('btn-view-wasteland').classList.remove('active');
+        document.getElementById('screen-base').classList.add('active');document.getElementById('screen-wasteland').classList.remove('active');
+    });
+    document.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click',()=>{
+        document.querySelectorAll('.tab-btn').forEach(x=>x.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active'));
+        b.classList.add('active');document.getElementById(b.getAttribute('data-tab')).classList.add('active');
+    }));
+
+    // Upgrades
+    ['treads','laser','cargo','battery'].forEach(t=>document.getElementById(`btn-up-${t}`).addEventListener('click',()=>{
+        const cost=get.upgradeCost(t);
+        if(get.alloys()>=cost){
+            // Deduct from refined metals (prioritise refined_iron)
+            let remaining=cost;
+            ['refined_iron','struct_steel','tempered_copper','ind_aluminium'].forEach(id=>{
+                if(remaining<=0)return;
+                const take=Math.min(STATE.inventory[id]||0,remaining);
+                STATE.inventory[id]-=take; remaining-=take;
+            });
+            STATE.upgrades[t]++;
+            addLog(`UPGRADE: ${t} Lvl ${STATE.upgrades[t]} installed.`,'success');saveGame();
+        }
+    }));
+
+    // Automation
+    document.getElementById('btn-auto-metal').addEventListener('click',()=>{ if(!STATE.automation.autoMetal&&get.biofuel()>=5){STATE.inventory['biofuel']-=5;STATE.automation.autoMetal=true;addLog("AUTOMATION: Auto-Refinery active.","success");saveGame();}});
+    document.getElementById('btn-auto-biomatter').addEventListener('click',()=>{ if(!STATE.automation.autoBiomatter&&get.biofuel()>=5){STATE.inventory['biofuel']-=5;STATE.automation.autoBiomatter=true;addLog("AUTOMATION: Auto-Reclaimer active.","success");saveGame();}});
+
+    // Expedition
+    document.getElementById('btn-control-deploy').addEventListener('click',deployRover);
+    document.getElementById('btn-control-recall').addEventListener('click',recallRover);
+    document.getElementById('btn-clear-console').addEventListener('click',()=>{ document.getElementById('console-log').innerHTML=`<div class="log-line system-line">[${formatTime(STATE.uptime)}] LOG CLEARED.</div>`; });
+    canvas.addEventListener('click',()=>{
+        if(STATE.expedition.status==='HARVESTING'&&STATE.expedition.obstacle){
+            const red=0.5*(1+0.1*STATE.upgrades.laser);
+            STATE.expedition.obstacle.timeLeft-=red;
+            STATE.expedition.activeDrills.push({x:ROVER_X+57,y:canvas.height-110,life:0.3,size:4});
+            if(STATE.expedition.obstacle.timeLeft<=0)clearObstacle();
+        }
+    });
+    document.querySelectorAll('.archive-item').forEach(item=>item.addEventListener('click',()=>{
+        if(item.classList.contains('locked'))return;
+        document.querySelectorAll('.archive-item').forEach(i=>i.classList.remove('active'));item.classList.add('active');
+        document.querySelectorAll('.archive-entry').forEach(e=>e.classList.add('hidden'));document.getElementById(item.getAttribute('data-log')).classList.remove('hidden');
+    }));
+
+    // Game loop
+    let lastTime=performance.now();
+    function loop(now){
+        const dt=Math.min((now-lastTime)/1000,1.5);
+        tick(dt);
+        if(document.getElementById('screen-wasteland').classList.contains('active')){engineUpdate(dt);engineRender();}
+        updateUI();
+        lastTime=now;
+        requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+    engineRender();
+});
+</script>
+</body>
+</html>
