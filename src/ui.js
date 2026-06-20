@@ -1308,6 +1308,9 @@ document.addEventListener('DOMContentLoaded', () => {
   loadGame(); syncAlloyOutputs(); initInv();
   resizeCv(); initSpores();
   window.addEventListener('resize', resizeCv);
+  window.addEventListener('load', resizeCv);   // re-fit once full layout + fonts are in (first paint can be 0-height)
+  // Bulletproof: refit the canvas buffer whenever its container actually changes size (title dismiss, reflow, etc.)
+  if (window.ResizeObserver) { const cw = document.querySelector('.cwrap'); if (cw) new ResizeObserver(() => resizeCv()).observe(cw); }
   buildAll();
 
   // ── OFFLINE / AWAY PROGRESS ──────────────────────────────────

@@ -76,6 +76,7 @@ function initSpores() {
 
 function resizeCv() {
   const r = canvas.parentElement.getBoundingClientRect();
+  if (r.width < 2 || r.height < 2) return;   // layout not ready yet — don't collapse the canvas buffer to ~0 (blank screen)
   canvas.width  = r.width;
   canvas.height = r.height;
 }
