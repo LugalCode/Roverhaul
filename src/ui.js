@@ -1590,9 +1590,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const biso = document.getElementById('biso');
   if (window.RH_RELEASE) {
     // PUBLIC BUILD: strip dev-only UI. Iso is the game (no 2D toggle); no Dev Tools tab.
+    // Remove the access points (toggle + tab button) but KEEP #pdv in the DOM and just hide it — the dev-tool
+    // buttons inside it are still wired during init, so removing the element would crash on .addEventListener.
     biso?.closest('.opt-row')?.remove();
     document.querySelector('.hub-btn[data-panel="pdv"]')?.remove();
-    document.getElementById('pdv')?.remove();
+    const pdv = document.getElementById('pdv'); if (pdv) { pdv.classList.remove('active'); pdv.style.display = 'none'; }
   } else if (biso) biso.addEventListener('click', () => {
     const on = !(window.ISO && ISO.on);
     localStorage.setItem('rh_iso', on ? '1' : '0');
