@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ROVERHAUL // v0.8</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Gunmetal industrial — Weyland-Yutani / Aliens mining-vessel palette */
+  --bg:#0a0a0b;--bg2:#17191c;--card:rgba(42,46,51,.55);--card2:rgba(60,65,72,.82);
+  --bdr:rgba(176,186,196,.16);--bdr2:rgba(200,210,220,.42);
+  /* Primary accent — brushed steel, not neon cyan */
+  --cyan:#b9c4cc;--cg:rgba(185,196,204,.45);
+  --green:#5fcf6b;--gg:rgba(95,207,107,.5);
+  --amber:#f0a830;--ag:rgba(240,168,48,.5);
+  --red:#e0533b;--dim:#8a9099;--bright:#dfe4e8;
+  /* hazard accent — Weyland caution yellow */
+  --hazard:#e8c020;
+  /* DEV tab accent — bright lime so it stands out */
+  --dev:#b9ff4b;--devg:rgba(185,255,75,.4);
+}
+*{box-sizing:border-box;margin:0;padding:0;user-select:none;}
+body{background:var(--bg);color:var(--bright);font-family:'Inter',sans-serif;height:100vh;overflow:hidden;}
+/* ── BUDGET CRT EFFECT — scoped to the game window (the "monitor") ── */
+/* Lives INSIDE .cwrap, so it only covers the gameplay canvas, never the UI,
+   and auto-hides when the wasteland view is inactive. Strength is a 0–1
+   multiplier (--crtS) driven by the Options slider. */
+#crtfx{position:absolute;inset:0;z-index:60;pointer-events:none;overflow:hidden;opacity:var(--crtS,0.9);transition:opacity .2s;}
+#crtfx.off{display:none;}
+#crtfx>div{position:absolute;inset:0;}
+/* scanlines + RGB phosphor mask (stronger) */
+.crt-scan{background:linear-gradient(rgba(18,16,16,0) 44%,rgba(0,0,0,.58) 56%),linear-gradient(90deg,rgba(255,0,0,.09),rgba(0,255,0,.04),rgba(0,0,255,.09));background-size:100% 3px,6px 100%;opacity:.92;animation:crtvhs 9s ease-in-out infinite;}
+/* green phosphor bleed/glow + gentle flicker */
+.crt-bleed{background:radial-gradient(ellipse at center,rgba(120,210,150,.08),transparent 60%);mix-blend-mode:screen;animation:crtflick 4.2s ease-in-out infinite;}
+/* heavier corner vignette → curved-tube illusion */
+.crt-vignette{background:radial-gradient(ellipse 80% 76% at center,transparent 44%,rgba(0,0,0,.42) 78%,rgba(0,0,0,.82) 100%);}
+/* rolling scan-line that sweeps top→bottom every few seconds (CRT refresh feel) */
+.crt-sweep{inset:auto 0 auto 0;height:14%;top:-14%;background:linear-gradient(180deg,transparent,rgba(190,255,210,.10) 50%,transparent);mix-blend-mode:screen;animation:crtsweep 6.5s ease-in-out infinite;}
+@keyframes crtsweep{0%,62%{top:-14%;opacity:0}66%{opacity:1}95%{opacity:1}100%{top:100%;opacity:0}}
+/* faint VHS horizontal wobble on the scanlines, occasional */
+@keyframes crtvhs{0%,89%,100%{transform:translateX(0)}91%{transform:translateX(-1.6px)}93%{transform:translateX(2px)}95%{transform:translateX(-1px)}97%{transform:translateX(.6px)}}
+/* occasional VHS static */
+.crt-static{opacity:0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");animation:crtstatic 10s linear infinite;}
+/* monitor glass: rounded corners, deep inner shadow, top specular sheen */
+.crt-bezel{border-radius:14px;box-shadow:inset 0 0 28px 10px rgba(0,0,0,.6),inset 0 0 150px rgba(0,0,0,.3);background:linear-gradient(165deg,rgba(255,255,255,.06) 0%,transparent 20%);}
+@keyframes crtflick{0%,100%{opacity:1}47%{opacity:.82}48%{opacity:1}72%{opacity:.9}}
+@keyframes crtstatic{0%,6.5%{opacity:0}7%{opacity:.08}7.7%{opacity:0}40%,40.3%{opacity:0}40.6%{opacity:.06}41.2%{opacity:0}73%{opacity:0}73.5%{opacity:.08}74.2%{opacity:0}100%{opacity:0}}
+/* ── OPTIONS MODAL ── */
+.opt-modal{position:fixed;inset:0;z-index:260;display:flex;align-items:center;justify-content:center;background:rgba(4,6,9,.6);backdrop-filter:blur(2px);}
+.opt-modal.hidden{display:none!important;}
+.opt-box{width:min(420px,92vw);background:linear-gradient(180deg,#1b1f23,#13161a);border:1px solid var(--bdr);border-radius:8px;box-shadow:0 12px 40px rgba(0,0,0,.7);padding:0 0 14px;}
+.opt-top{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:1px solid var(--bdr);font-family:'Share Tech Mono',monospace;letter-spacing:3px;color:var(--cyan);font-size:.92rem;}
+.opt-x{background:transparent;border:none;color:var(--dim);font-size:1.05rem;cursor:pointer;}
+.opt-x:hover{color:var(--bright);}
+.opt-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px 18px;border-bottom:1px solid rgba(255,255,255,.05);}
+.opt-row label{font-family:'Share Tech Mono',monospace;font-size:.82rem;color:var(--bright);letter-spacing:1px;}
+.opt-tg{min-width:96px;text-align:center;background:transparent;border:1px solid var(--bdr);color:var(--dim);font-family:'Share Tech Mono',monospace;font-size:.8rem;padding:7px 12px;cursor:pointer;border-radius:4px;letter-spacing:1px;transition:all .2s;}
+.opt-tg:hover{border-color:var(--cyan);color:var(--bright);}
+.opt-tg.active{border-color:var(--green);color:var(--green);background:rgba(95,207,107,.12);}
+.opt-row input[type=range]{flex:1;max-width:200px;accent-color:var(--green);cursor:pointer;}
+.opt-val{font-family:'Share Tech Mono',monospace;font-size:.78rem;color:var(--cyan);min-width:42px;text-align:right;}
+.app{display:grid;grid-template-rows:60px 1fr;height:100vh;width:100vw;background:radial-gradient(ellipse at center,#1a1c1f 0%,var(--bg) 100%);}
+/* HEADER */
+.hdr{background:linear-gradient(180deg,#212429 0%,#15171a 100%);border-bottom:2px solid var(--bdr);box-shadow:0 2px 6px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:space-between;padding:0 20px;backdrop-filter:blur(10px);}
+.hdl{display:flex;align-items:center;gap:12px;}
+.hdr h1{font-family:'Share Tech Mono',monospace;font-size:1.1rem;letter-spacing:2px;color:var(--cyan);text-shadow:0 0 8px var(--cg);}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--gg);animation:blink 1.5s infinite alternate;}
+@keyframes blink{0%{opacity:.3}100%{opacity:1}}
+.vtog{display:flex;gap:10px;}
+.vbtn{background:transparent;border:1px solid var(--bdr);color:var(--dim);font-family:'Share Tech Mono',monospace;font-size:.85rem;padding:7px 16px;cursor:pointer;border-radius:3px;letter-spacing:1px;transition:all .25s;display:flex;align-items:center;gap:6px;}
+.vbtn:hover{border-color:var(--cyan);color:var(--bright);background:rgba(185,196,204,.06);}
+.vbtn.active{border-color:var(--cyan);color:var(--cyan);background:rgba(185,196,204,.12);}
+.pls{width:6px;height:6px;background:var(--red);border-radius:50%;display:inline-block;animation:blink .8s infinite alternate;}
+/* MAIN */
+.mon{position:relative;width:100%;height:100%;overflow:hidden;}
+.sv{position:absolute;inset:0;opacity:0;pointer-events:none;transition:opacity .3s;}
+.sv.active{opacity:1;pointer-events:auto;}
+/* WASTELAND */
+#sw{display:flex;align-items:center;justify-content:center;background:#030608;padding:14px;}
+/* Wasteland screen is a row: [vertical gauges] [game window] [resources panel].
+   Panels are pinned to the screen EDGES (space-between) and the game window fills the middle, so the
+   gameplay area isn't pushed inward and the side panels can use the edge space for longer text. */
+#sw{display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:12px;padding:20px 14px;}
+.sidegauges{flex:0 0 162px;align-self:stretch;height:100%;max-height:none;display:flex;flex-direction:row;gap:20px;
+  background:rgba(6,12,8,.92);border:1px solid rgba(255,170,0,.22);border-radius:0 5px 5px 0;border-left:none;padding:14px 20px;
+  box-shadow:0 0 24px rgba(0,0,0,.7);font-family:'Share Tech Mono',monospace;}
+.vgauge{flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;}
+#thrgauge{cursor:pointer;border-radius:4px;transition:filter .2s;}
+#thrgauge:hover{filter:brightness(1.25);}
+.vg-lbl{font-size:.56rem;letter-spacing:1px;color:var(--dim);}
+.vg-val{font-size:.6rem;letter-spacing:.5px;color:var(--dim);text-align:center;min-height:1em;white-space:nowrap;}
+.vg-track{position:relative;flex:1;width:42px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:4px;overflow:hidden;}
+.vg-lbl{font-size:.62rem;}
+.vg-fill{position:absolute;left:0;right:0;bottom:0;top:0;transform-origin:bottom center;transform:scaleY(1);background:linear-gradient(0deg,#ffaa00,#ffea00);box-shadow:0 0 8px rgba(255,170,0,.6);transition:transform .12s linear;}
+.vg-fill.crit{background:linear-gradient(0deg,#ff3b30,#ff7b70);}
+.vg-fill.bst{background:linear-gradient(0deg,#1f7a8c,#46e8ff);}
+.vg-fill.bst.charging{background:linear-gradient(0deg,#7a5a10,#f0a830);}
+.vg-fill.bst.ready{background:linear-gradient(0deg,#2a7a3a,#5fcf6b);box-shadow:0 0 8px rgba(95,207,107,.6);}
+.cwrap{position:relative;flex:1 1 auto;min-width:0;width:100%;max-width:1600px;height:100%;max-height:none;margin:0 auto;overflow:hidden;border:1px solid rgba(57,230,91,.2);box-shadow:0 0 40px rgba(0,0,0,.9);background:#030a06;}
+#gc{width:100%;height:100%;display:block;cursor:crosshair;}
+.hudl{position:absolute;pointer-events:none;z-index:5;font-family:'Share Tech Mono',monospace;}
+/* RESOURCES THIS RUN — its own panel BESIDE the game window (outside the canvas/CRT, so it stays readable) */
+/* Right column: two stacked pills (resources-this-run on top, telemetry below), pinned to the screen edge */
+.rightcol{flex:0 0 246px;align-self:stretch;height:100%;max-height:none;display:flex;flex-direction:column;gap:10px;}
+.runres{position:relative;flex:1 1 auto;min-height:64px;display:flex;flex-direction:column;
+  background:rgba(6,12,8,.92);border:1px solid rgba(57,230,91,.28);border-radius:5px 0 0 5px;border-right:none;
+  padding:10px 13px;font-family:'Share Tech Mono',monospace;box-shadow:0 0 24px rgba(0,0,0,.7);}
+.rightcol .aux{flex:0 0 auto;border:1px solid rgba(57,230,91,.28);border-right:none;border-radius:5px 0 0 5px;
+  background:rgba(6,12,8,.92);box-shadow:0 0 24px rgba(0,0,0,.7);padding:9px 12px 10px;}
+.runres-hdr{font-size:.58rem;letter-spacing:1.5px;color:var(--dim);text-transform:uppercase;margin-bottom:5px;border-bottom:1px solid rgba(255,255,255,.07);padding-bottom:4px;}
+.runres-list{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:2px;font-size:.72rem;color:var(--green);}
+.runres-list .trline{display:flex;justify-content:space-between;gap:8px;}
+.runres-list .trline .shp{color:var(--dim);}
+.runres.empty{opacity:.5;}
+.htop{top:20px;left:20px;right:20px;display:flex;justify-content:space-between;}
+.hbox{background:rgba(14,18,26,.75);border:1px solid var(--bdr);padding:8px 16px;border-radius:4px;backdrop-filter:blur(5px);display:flex;flex-direction:column;min-width:150px;}
+.hlbl{font-size:.75rem;color:var(--dim);letter-spacing:1px;}
+.hval{font-size:1.1rem;color:var(--cyan);text-shadow:0 0 6px var(--cg);margin-top:4px;}
+.hbot{bottom:25px;left:50%;transform:translateX(-50%);width:50%;min-width:320px;}
+.pbc{background:rgba(255,255,255,.025);border:1px solid var(--bdr);padding:7px 11px;border-radius:4px;}
+.pbl{display:flex;justify-content:space-between;font-size:.7rem;color:var(--dim);margin-bottom:5px;letter-spacing:1px;font-family:'Share Tech Mono',monospace;}
+.pbt{height:10px;background:rgba(255,255,255,.05);border-radius:2px;overflow:hidden;border:1px solid rgba(255,255,255,.1);}
+.pbf{height:100%;width:100%;background:linear-gradient(90deg,#ffaa00,#ffea00);box-shadow:0 0 8px rgba(255,170,0,.6);transition:width .1s linear;}
+.pbf.crit{background:linear-gradient(90deg,#ff3b30,#ff7b70);}
+.pbf.bst{background:linear-gradient(90deg,#1f7a8c,#46e8ff);}
+.pbf.bst.charging{background:linear-gradient(90deg,#7a5a10,#f0a830);}
+.pbf.bst.ready{background:linear-gradient(90deg,#2a7a3a,#5fcf6b);box-shadow:0 0 8px rgba(95,207,107,.6);}
+.hst{top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;}
+.hst-txt{font-size:2.5rem;letter-spacing:6px;color:rgba(255,170,0,.15);border:2px solid rgba(255,170,0,.08);padding:15px 40px;border-radius:4px;text-transform:uppercase;animation:gflick 4s infinite alternate;}
+@keyframes gflick{0%,95%,98%{opacity:.15;border-color:rgba(255,170,0,.08);}96%,99%{opacity:.5;border-color:var(--amber);color:var(--amber);text-shadow:0 0 10px var(--ag);}}
+.hint{position:absolute;bottom:85px;left:50%;transform:translateX(-50%);font-family:'Share Tech Mono',monospace;font-size:.82rem;color:var(--amber);background:rgba(0,0,0,.75);padding:6px 16px;border-radius:4px;border:1px solid rgba(255,170,0,.35);letter-spacing:1px;pointer-events:none;z-index:5;animation:blink 1s infinite alternate;}
+.hint.hidden{display:none!important;}
+/* ── BASE OPS: hub layout ── */
+#sb{background:rgba(8,9,12,.97);overflow:hidden;display:flex;flex-direction:column;}
+.base-hub{display:grid;grid-template-columns:repeat(10,1fr);gap:12px;padding:16px 20px 0;flex-shrink:0;}
+.base-hub.forge-hidden{grid-template-columns:repeat(9,1fr);}
+.forge-tab-hidden{display:none!important;}
+.hub-btn.deck-back{color:var(--green,#5fcf6b);border-color:rgba(95,207,107,.35);}
+.hub-btn.deck-back:hover{background:rgba(95,207,107,.12);}
+/* ── SHIP CROSS-SECTION deck map (landing view of Ship Utilities) ── */
+#sb.deck-mode .base-hub,#sb.deck-mode .base-panel-wrap{display:none;}
+#sb:not(.deck-mode) #deckmap{display:none;}
+#deckmap{display:flex;flex-direction:column;height:100%;padding:14px 20px 16px;gap:10px;}
+.deckmap-hdr{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;}
+.deckmap-title{font-family:'Share Tech Mono',monospace;letter-spacing:3px;font-size:.95rem;color:var(--ink,#cdd6bf);}
+.deckmap-title span{color:var(--dim);font-size:.78rem;letter-spacing:2px;}
+.deckmap-stats{display:flex;gap:14px;font-family:'Share Tech Mono',monospace;font-size:.62rem;letter-spacing:1.5px;color:var(--dim);}
+.deckmap-stats b{color:var(--green,#5fcf6b);font-weight:400;}
+.deckmap-stage{position:relative;flex:1;min-height:0;background:radial-gradient(120% 90% at 50% 22%,#15180f 0%,#080906 72%);border:1px solid var(--bdr,#2b3122);border-radius:8px;overflow:hidden;box-shadow:inset 0 0 70px rgba(0,0,0,.7);}
+#deckmap-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+/* Rover Bay fixture tooltip (src/rooms.js) — biomech CRT label that follows the cursor */
+#room-tip{position:fixed;display:none;z-index:140;pointer-events:none;font-family:'Share Tech Mono',monospace;font-size:1rem;letter-spacing:1.5px;text-transform:uppercase;color:#eef0dc;background:linear-gradient(180deg,rgba(20,24,14,.97),rgba(10,12,7,.97));border:1px solid rgba(202,160,51,.6);border-left:3px solid #caa033;border-radius:4px;padding:9px 15px;box-shadow:0 4px 18px rgba(0,0,0,.7),0 0 0 1px rgba(0,0,0,.4),0 0 14px rgba(202,160,51,.18);text-shadow:0 0 8px rgba(202,160,51,.3);white-space:nowrap;}
+.deckmap-foot{text-align:center;font-family:'Share Tech Mono',monospace;font-size:.7rem;letter-spacing:2px;color:var(--dim);min-height:1em;}
+.hub-btn{background:linear-gradient(180deg,rgba(255,255,255,.06) 0%,rgba(255,255,255,.015) 45%,rgba(0,0,0,.15) 100%);border:1px solid rgba(255,255,255,.12);border-top-color:rgba(255,255,255,.2);border-radius:6px;padding:16px 10px 12px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px;transition:all .25s;font-family:'Share Tech Mono',monospace;font-size:.7rem;letter-spacing:1.5px;color:var(--dim);text-transform:uppercase;box-shadow:inset 0 1px 0 rgba(255,255,255,.05);}
+.hub-btn:hover{background:linear-gradient(180deg,rgba(255,255,255,.1) 0%,rgba(255,255,255,.03) 45%,rgba(0,0,0,.12) 100%);border-color:rgba(255,255,255,.28);color:var(--bright);}
+.hub-btn.active{border-color:var(--cyan);background:rgba(185,196,204,.1);color:var(--cyan);box-shadow:0 0 12px rgba(185,196,204,.12) inset,0 -3px 0 var(--cyan);}
+.hub-btn.dev-hub{border-color:rgba(185,255,75,.25);color:var(--dev);}
+.hub-btn.dev-hub.active{border-color:var(--dev);background:rgba(185,255,75,.08);box-shadow:0 0 12px var(--devg) inset,0 -3px 0 var(--dev);}
+.hub-icon{font-size:1.6rem;line-height:1;}
+.base-panel-wrap{flex:1;overflow:hidden;padding:0 20px 16px;}
+.bpanel{display:none;position:relative;height:100%;background:var(--bg2);border:1px solid var(--bdr);border-radius:0 0 6px 6px;padding:20px;overflow-y:auto;}
+.bpanel.active{display:block;}
+/* ── DOCKED FACILITY DRAWER — room stays live on the left, UI compacts into the right ~58% ── */
+#sb.dock-mode{background:transparent;pointer-events:none;}
+#sb.dock-mode #deckmap,#sb.dock-mode .base-hub{display:none;}
+#sb.dock-mode .base-panel-wrap{position:absolute;top:0;right:0;bottom:0;width:58%;padding:46px 16px 16px;pointer-events:auto;z-index:80;background:linear-gradient(90deg,rgba(10,12,7,.62) 0%,rgba(13,16,9,.95) 8%,rgba(13,16,9,.97) 100%);border-left:1px solid rgba(202,160,51,.45);box-shadow:-22px 0 46px rgba(0,0,0,.55);animation:dockslide .28s ease-out;}
+#sb.dock-mode .bpanel{background:rgba(10,13,8,.5);border-color:var(--bdr);border-radius:6px;}
+@keyframes dockslide{from{transform:translateX(40px);opacity:0;}to{transform:translateX(0);opacity:1;}}
+#dock-exit{display:none;}
+#sb.dock-mode #dock-exit{display:inline-flex;align-items:center;gap:6px;position:absolute;top:12px;right:16px;z-index:6;pointer-events:auto;font-family:'Share Tech Mono',monospace;font-size:.64rem;letter-spacing:1px;text-transform:uppercase;color:var(--dim);background:linear-gradient(180deg,rgba(22,26,15,.96),rgba(10,12,7,.96));border:1px solid rgba(202,160,51,.4);border-radius:4px;padding:6px 11px;cursor:pointer;transition:all .2s;}
+#sb.dock-mode #dock-exit:hover{color:#eef0dc;border-color:#caa033;box-shadow:0 0 10px rgba(202,160,51,.25);}
+/* ── IN-ROOM TERMINAL OVERLAY (toggled from the bay command console) ── */
+#term-overlay{position:absolute;left:0;top:0;bottom:0;width:42%;max-width:560px;z-index:90;display:none;pointer-events:none;}
+#term-overlay.open{display:block;}
+#term-overlay .term-frame{position:absolute;inset:14px;display:flex;flex-direction:column;pointer-events:auto;background:linear-gradient(180deg,rgba(13,16,9,.97),rgba(8,10,6,.98));border:1px solid rgba(202,160,51,.45);border-radius:6px;box-shadow:0 0 40px rgba(0,0,0,.6),0 0 16px rgba(202,160,51,.12);animation:termslide .26s ease-out;overflow:hidden;}
+@keyframes termslide{from{transform:translateX(-30px);opacity:0;}to{transform:translateX(0);opacity:1;}}
+#term-overlay .term-bar{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;font-family:'Share Tech Mono',monospace;font-size:.72rem;letter-spacing:1.5px;text-transform:uppercase;color:#caa033;border-bottom:1px solid rgba(202,160,51,.3);background:rgba(0,0,0,.3);}
+#term-overlay #term-close{background:none;border:1px solid rgba(202,160,51,.4);color:#caa033;border-radius:3px;cursor:pointer;font-size:.7rem;padding:2px 8px;}
+#term-overlay #term-close:hover{color:#eef0dc;border-color:#caa033;}
+#term-overlay .term-body{flex:1;min-height:0;display:flex;padding:8px;}
+#term-overlay .term-body #cpan{flex:1;min-height:0;display:flex;flex-direction:column;}
+.bpanel.dev-panel{border-color:rgba(185,255,75,.3);background:#040a00;}
+/* SHARED CARD STYLES */
+.grid4{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;}
+.card{background:var(--card);border:1px solid var(--bdr);border-radius:4px;padding:16px;display:flex;flex-direction:column;gap:10px;transition:all .25s;}
+.card:hover{background:var(--card2);border-color:var(--bdr2);transform:translateY(-1px);}
+.card h3{font-size:.95rem;font-weight:600;}
+.lvlbdg{font-family:'Share Tech Mono',monospace;color:var(--cyan);font-size:.82rem;background:rgba(185,196,204,.1);padding:2px 8px;border-radius:3px;}
+.bestval{font-family:'Share Tech Mono',monospace;font-size:.56rem;letter-spacing:.5px;color:#0a0a0b;background:var(--hazard);padding:1px 6px;border-radius:3px;vertical-align:middle;box-shadow:0 0 8px rgba(232,192,32,.5);}
+.desc{font-size:.8rem;color:var(--dim);line-height:1.45;min-height:30px;}
+.stats{background:rgba(8,9,12,.4);border:1px solid rgba(255,255,255,.05);padding:8px;border-radius:3px;font-family:'Share Tech Mono',monospace;font-size:.8rem;display:flex;justify-content:space-between;}
+.stats span{color:var(--cyan);}
+.ubtn{background:rgba(185,196,204,.1);border:1px solid var(--cyan);color:var(--cyan);font-family:'Share Tech Mono',monospace;font-size:.86rem;padding:8px;border-radius:3px;cursor:pointer;transition:all .2s;margin-top:auto;}
+.ubtn:hover:not(:disabled){background:var(--cyan);color:#000;}
+.ubtn:disabled{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1);color:rgba(255,255,255,.2);cursor:not-allowed;}
+.upcost-lbl{font-family:'Share Tech Mono',monospace;font-size:.6rem;letter-spacing:1.5px;color:var(--dim);text-transform:uppercase;margin-top:2px;}
+.upcost{display:flex;flex-wrap:wrap;gap:5px;}
+.cmat{display:flex;align-items:center;gap:5px;font-family:'Share Tech Mono',monospace;font-size:.72rem;color:var(--bright);background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.07);border-radius:3px;padding:3px 8px;}
+.cmat b{color:var(--green);font-weight:600;}
+.cmat.short b{color:var(--red);}
+.cmat-dot{width:8px;height:8px;border-radius:50%;box-shadow:0 0 5px currentColor;flex-shrink:0;}
+.card.locked-card{opacity:.45;pointer-events:none;border-style:dashed;}
+.lock-note{font-family:'Share Tech Mono',monospace;font-size:.7rem;color:var(--amber);text-align:center;padding:5px;background:rgba(255,170,0,.08);border-radius:3px;}
+/* CARGO */
+.catsec{margin-bottom:22px;}
+.secttl{font-family:'Share Tech Mono',monospace;font-size:.68rem;letter-spacing:3px;color:var(--dim);text-transform:uppercase;margin:0 0 8px;padding-bottom:4px;border-bottom:1px solid rgba(255,255,255,.06);}
+.cgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:7px;}
+.ccard{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.07);border-radius:4px;padding:9px 11px;display:flex;flex-direction:column;gap:4px;}
+.cname{font-size:.72rem;color:var(--dim);}
+.cqty{font-family:'Share Tech Mono',monospace;font-size:1.2rem;font-weight:600;}
+.ctier{font-size:.62rem;letter-spacing:1px;padding:1px 5px;border-radius:2px;display:inline-block;width:fit-content;}
+.tr{color:#aab1b8;background:rgba(170,177,184,.1);border:1px solid rgba(170,177,184,.2);}
+.trf{color:var(--cyan);background:rgba(185,196,204,.08);border:1px solid rgba(185,196,204,.22);}
+.tal{color:#e0a85a;background:rgba(224,168,90,.08);border:1px solid rgba(224,168,90,.28);}
+.tex{color:#c084fc;background:rgba(192,132,252,.07);border:1px solid rgba(192,132,252,.2);}
+.tbm{color:var(--green);background:rgba(57,230,91,.07);border:1px solid rgba(57,230,91,.2);}
+.cbar{height:3px;background:rgba(255,255,255,.05);border-radius:2px;overflow:hidden;margin-top:2px;}
+.cbar-f{height:100%;border-radius:2px;transition:width .4s;}
+/* per-resource Mastery on cargo cards */
+.cmastery{display:flex;align-items:center;gap:6px;margin-top:4px;}
+.cmastery .cml{font-family:'Share Tech Mono',monospace;font-size:.58rem;color:var(--amber);letter-spacing:.5px;min-width:20px;}
+.cmbar{flex:1;height:3px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden;}
+.cmbar-f{display:block;height:100%;width:0;background:linear-gradient(90deg,#c8922e,#f0c060);transition:width .4s;}
+.cargo-mastery-sum{font-family:'Share Tech Mono',monospace;font-size:.72rem;color:var(--bright);margin-bottom:14px;padding:8px 12px;background:rgba(240,168,48,.06);border:1px solid rgba(240,168,48,.25);border-radius:6px;}
+.cargo-mastery-sum b{color:var(--amber);}
+/* FORGE */
+.forge-layout{display:grid;grid-template-columns:1fr 60px 1fr 60px 1fr;gap:10px;align-items:start;margin-bottom:20px;}
+.forge-craft{display:grid;grid-template-columns:1fr 1.15fr;gap:14px;align-items:start;margin-bottom:20px;}
+.fg-reqs{display:flex;flex-direction:column;gap:6px;font-family:'Share Tech Mono',monospace;font-size:.78rem;min-height:44px;}
+.fg-req{display:flex;justify-content:space-between;gap:10px;padding:6px 9px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.07);border-radius:3px;}
+.fg-req .fg-have{color:var(--dim);}
+.fg-req.ok .fg-have{color:var(--green);}
+.fg-req.short .fg-have{color:#e8643c;}
+.forge-panel{background:var(--card);border:1px solid var(--bdr);border-radius:4px;padding:12px;display:flex;flex-direction:column;gap:7px;}
+.forge-panel h3{font-family:'Share Tech Mono',monospace;font-size:.7rem;letter-spacing:2px;color:var(--dim);}
+.forge-arrow{display:flex;align-items:center;justify-content:center;font-size:1.4rem;color:var(--dim);padding-top:36px;}
+.fsel{background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);color:var(--bright);font-family:'Share Tech Mono',monospace;font-size:.8rem;padding:6px;border-radius:3px;width:100%;}
+.fsel:focus{outline:none;border-color:var(--cyan);}
+.fqty{font-family:'Share Tech Mono',monospace;font-size:.72rem;color:var(--dim);}
+.fres{background:rgba(255,255,255,.02);border:1px dashed rgba(255,255,255,.1);border-radius:3px;padding:9px;text-align:center;font-family:'Share Tech Mono',monospace;font-size:.82rem;color:var(--dim);min-height:44px;display:flex;align-items:center;justify-content:center;}
+.fbtn{background:rgba(57,230,91,.12);border:1px solid var(--green);color:var(--green);font-family:'Share Tech Mono',monospace;font-size:.82rem;padding:9px;border-radius:3px;cursor:pointer;width:100%;transition:all .2s;margin-top:3px;}
+.fbtn:hover:not(:disabled){background:var(--green);color:#000;}
+.fbtn:disabled{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.08);color:rgba(255,255,255,.18);cursor:not-allowed;}
+.alloy-tbl{width:100%;border-collapse:collapse;font-family:'Share Tech Mono',monospace;font-size:.78rem;}
+.alloy-tbl th{text-align:left;padding:6px 8px;font-size:.65rem;letter-spacing:2px;color:var(--dim);border-bottom:1px solid rgba(255,255,255,.08);}
+.alloy-tbl td{padding:5px 8px;border-bottom:1px solid rgba(255,255,255,.04);}
+/* REFINERY */
+.refgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:18px;}
+.refcard{background:var(--card);border:1px solid var(--bdr);border-radius:4px;padding:14px;display:flex;flex-direction:column;gap:9px;}
+.refcard h2{font-size:.9rem;font-weight:600;}
+.refbdg{font-family:'Share Tech Mono',monospace;font-size:.66rem;color:var(--green);border:1px solid var(--green);padding:1px 5px;border-radius:3px;}
+.refinv{background:rgba(8,9,12,.4);border:1px solid rgba(255,255,255,.05);padding:8px 10px;border-radius:3px;display:flex;flex-direction:column;gap:4px;font-size:.8rem;}
+.irow{display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;}
+.abtn{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.15);color:var(--bright);font-family:'Share Tech Mono',monospace;font-size:.8rem;padding:7px;border-radius:3px;cursor:pointer;transition:all .2s;}
+.abtn:hover:not(:disabled){background:rgba(255,255,255,.1);}
+.abtn:disabled{opacity:.4;cursor:not-allowed;}
+.autosec{border-top:1px solid rgba(255,255,255,.06);padding-top:14px;margin-top:4px;}
+.autosec h2{font-size:.9rem;margin-bottom:10px;font-family:'Share Tech Mono',monospace;}
+.autogrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:9px;}
+.autocard{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:4px;padding:9px 12px;display:flex;align-items:center;justify-content:space-between;gap:9px;}
+.autocard h4{font-size:.84rem;font-weight:600;}
+.autocard p{font-size:.68rem;color:var(--dim);margin-top:2px;}
+.sbtn{background:rgba(57,230,91,.1);border:1px solid var(--green);color:var(--green);font-family:'Share Tech Mono',monospace;font-size:.74rem;padding:4px 9px;border-radius:3px;cursor:pointer;white-space:nowrap;}
+.sbtn:hover:not(:disabled){background:var(--green);color:#000;}
+.sbtn:disabled{background:rgba(255,255,255,.03);border-color:rgba(255,255,255,.08);color:rgba(255,255,255,.15);cursor:not-allowed;}
+/* ARCHIVES */
+.arclay{display:grid;grid-template-columns:220px 1fr;gap:14px;}
+.arcside{border-right:1px solid rgba(255,255,255,.08);padding-right:11px;}
+.arclist{list-style:none;display:flex;flex-direction:column;gap:6px;}
+.arci{font-family:'Share Tech Mono',monospace;font-size:.78rem;padding:8px 10px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:3px;cursor:pointer;color:var(--dim);transition:all .2s;}
+.arci:hover:not(.locked){color:var(--bright);background:rgba(185,196,204,.04);border-color:rgba(185,196,204,.18);}
+.arci.active{color:var(--cyan);background:rgba(185,196,204,.09);border-color:var(--cyan);}
+.arci.locked{color:rgba(255,255,255,.15);cursor:not-allowed;background:rgba(0,0,0,.2);}
+.arcv{padding-left:9px;overflow-y:auto;max-height:360px;}
+.arcv h2{font-family:'Share Tech Mono',monospace;color:var(--cyan);font-size:1.05rem;margin-bottom:5px;}
+.arcv .ts{font-family:'Share Tech Mono',monospace;font-size:.74rem;color:var(--amber);margin-bottom:12px;}
+.arcv p{font-size:.84rem;color:var(--dim);line-height:1.6;margin-bottom:10px;}
+.arcv em{color:var(--bright);font-style:normal;font-weight:600;}
+/* OBJECTIVES / ACHIEVEMENTS */
+.ach-hdr-row{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:14px;}
+.ach-count{font-family:'Share Tech Mono',monospace;font-size:.8rem;color:var(--cyan);background:rgba(185,196,204,.1);padding:3px 12px;border-radius:3px;white-space:nowrap;}
+.ach-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;}
+.ach-card{display:flex;gap:12px;align-items:flex-start;background:var(--card);border:1px solid var(--bdr);border-radius:5px;padding:12px 13px;transition:all .25s;position:relative;overflow:hidden;}
+.ach-card.done{border-color:var(--gg);background:linear-gradient(180deg,rgba(95,207,107,.08),rgba(42,46,51,.55));}
+.ach-card.done::after{content:'';position:absolute;inset:0;border-radius:5px;box-shadow:inset 0 0 18px rgba(95,207,107,.12);pointer-events:none;}
+.ach-icon{font-size:1.7rem;line-height:1;filter:grayscale(.6);opacity:.6;flex-shrink:0;}
+.ach-card.done .ach-icon{filter:none;opacity:1;}
+.ach-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;}
+.ach-name{font-size:.9rem;font-weight:600;color:var(--bright);}
+.ach-desc{font-size:.74rem;color:var(--dim);line-height:1.4;}
+.ach-reward{font-family:'Share Tech Mono',monospace;font-size:.64rem;color:var(--amber);letter-spacing:.5px;}
+.ach-bar{height:5px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;margin-top:4px;}
+.ach-bar-f{height:100%;width:0;background:linear-gradient(90deg,#3a7a3e,#5fcf6b);border-radius:3px;transition:width .3s;}
+.ach-card.done .ach-bar-f{background:linear-gradient(90deg,#5fcf6b,#9be8a4);}
+.ach-prog{font-family:'Share Tech Mono',monospace;font-size:.66rem;color:var(--dim);text-align:right;}
+.ach-check{font-family:'Share Tech Mono',monospace;font-size:1rem;flex-shrink:0;color:var(--dim);}
+.ach-card.done .ach-check{color:var(--green);}
+/* RESEARCH (tech tree) — reuses .ach-grid/.ach-card/.ach-icon/.ach-body/.ach-name/.ach-desc */
+.ach-card.locked{opacity:.6;}
+.ach-card.avail{border-color:var(--cg);}
+.tr-req{font-family:'Share Tech Mono',monospace;font-size:.66rem;color:var(--dim);margin-top:2px;}
+.tr-req b{color:var(--amber);}
+.tr-cost{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;}
+.tr-cmat{font-family:'Share Tech Mono',monospace;font-size:.68rem;color:var(--bright);background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.07);border-radius:3px;padding:2px 7px;}
+.tr-cmat.short{color:var(--red);border-color:rgba(224,83,59,.4);}
+.tr-btn{margin-top:7px;background:rgba(95,207,107,.1);border:1px solid var(--green);color:var(--green);font-family:'Share Tech Mono',monospace;font-size:.78rem;padding:6px;border-radius:3px;cursor:pointer;transition:all .2s;}
+.tr-btn:hover:not(:disabled){background:var(--green);color:#000;}
+.tr-btn:disabled{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.1);color:rgba(255,255,255,.25);cursor:not-allowed;}
+.tr-owned{margin-top:7px;font-family:'Share Tech Mono',monospace;font-size:.72rem;color:var(--green);text-align:center;letter-spacing:1px;}
+/* DESCEND button (renamed from .desc to avoid clobbering the upgrade-card .desc text) */
+.cdsc{background:rgba(192,132,252,.12);border-color:#c084fc;color:#d8b6ff;}
+.cdsc:hover:not(:disabled){background:#c084fc;color:#000;}
+/* Best-value upgrade button — pulses gold */
+@keyframes goldpulse{0%,100%{box-shadow:0 0 0 0 rgba(232,192,32,0);}50%{box-shadow:0 0 13px 2px rgba(232,192,32,.7);}}
+.ubtn.bestbuy{animation:goldpulse 1.2s ease-in-out infinite;border-color:var(--hazard)!important;color:var(--hazard)!important;background:rgba(232,192,32,.12)!important;}
+.ubtn.bestbuy:hover:not(:disabled){background:var(--hazard)!important;color:#000!important;}
+/* DEV TOOLS — bright lime theme */
+.dev-panel{color:#d4ffaa;}
+.dw{font-family:'Share Tech Mono',monospace;font-size:.76rem;color:#ff6b6b;background:rgba(255,59,48,.08);border:1px solid rgba(255,59,48,.3);border-radius:3px;padding:7px 11px;margin-bottom:14px;}
+.dsect{font-family:'Share Tech Mono',monospace;font-size:.68rem;letter-spacing:3px;color:var(--dev);text-transform:uppercase;margin:14px 0 8px;padding-bottom:4px;border-bottom:1px solid rgba(185,255,75,.2);}
+.dtbl{width:100%;border-collapse:collapse;font-family:'Share Tech Mono',monospace;font-size:.74rem;margin-bottom:14px;}
+.dtbl th{text-align:left;padding:6px 7px;font-size:.63rem;letter-spacing:2px;color:var(--dev);border-bottom:1px solid rgba(185,255,75,.2);background:rgba(185,255,75,.05);}
+.dtbl td{padding:4px 3px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:middle;}
+.dtbl tr:hover td{background:rgba(185,255,75,.03);}
+.di{background:rgba(0,0,0,.5);border:1px solid rgba(185,255,75,.2);color:#d4ffaa;font-family:'Share Tech Mono',monospace;font-size:.74rem;padding:3px 6px;border-radius:2px;width:100%;}
+.di:focus{outline:none;border-color:var(--dev);}
+.di[type=number]{width:62px;}
+.ds{background:rgba(0,0,0,.5);border:1px solid rgba(185,255,75,.2);color:#d4ffaa;font-family:'Share Tech Mono',monospace;font-size:.72rem;padding:3px 5px;border-radius:2px;}
+.ds:focus{outline:none;border-color:var(--dev);}
+.dadd{background:rgba(185,255,75,.12);border:1px solid var(--dev);color:var(--dev);font-family:'Share Tech Mono',monospace;font-size:.76rem;padding:5px 12px;border-radius:3px;cursor:pointer;margin-bottom:9px;}
+.dadd:hover{background:var(--dev);color:#000;}
+.ddel{background:rgba(255,59,48,.1);border:1px solid var(--red);color:var(--red);font-family:'Share Tech Mono',monospace;font-size:.68rem;padding:2px 7px;border-radius:2px;cursor:pointer;}
+.ddel:hover{background:var(--red);color:#fff;}
+.dapp{background:rgba(185,255,75,.15);border:1px solid var(--dev);color:var(--dev);font-family:'Share Tech Mono',monospace;font-size:.74rem;padding:3px 9px;border-radius:2px;cursor:pointer;}
+.dapp:hover{background:var(--dev);color:#000;}
+.dgrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}
+/* BOTTOM BAR */
+/* Footer slots (flex). The SHIP-UI PILL is always present and splits the bay 50/50 with the active left pill:
+   the TERMINAL on the wasteland, or the (smaller) LIVE CAMERA on Ship Utilities. DEPLOY sits on the right. */
+.bbar{display:none!important;}   /* footer removed — terminal lives in-room, controls moved to .gamebar; #cpan/#bdep etc. kept here as hidden storage */
+.bbar-legacy{position:relative;background:linear-gradient(180deg,#15171a 0%,#0c0d0f 100%);border-top:2px solid var(--bdr);display:flex;align-items:stretch;height:100%;}
+/* Floating control bar over the game screen (Deploy / Recall / Descend, relocated from the footer) */
+.gamebar{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);z-index:70;display:flex;gap:10px;pointer-events:auto;}
+.gamebar .ectr{flex-direction:row;border-left:none;padding:8px 10px;gap:10px;background:linear-gradient(180deg,rgba(16,19,12,.86),rgba(8,10,6,.9));border:1px solid rgba(255,255,255,.08);border-radius:8px;box-shadow:0 6px 22px rgba(0,0,0,.5);backdrop-filter:blur(3px);}
+.cpan{flex:1 1 0;min-width:0;box-sizing:border-box;border-right:1px solid rgba(255,255,255,.08);}
+/* the feed pill is a CONTROL-PANEL CONSOLE; the live feed is a monitor centred inside it */
+.wfeed{flex:1 1 0;min-width:0;box-sizing:border-box;border-right:1px solid rgba(255,255,255,.08);
+  align-items:center;justify-content:center;gap:7px;padding:9px 12px;
+  background:linear-gradient(180deg,#1b1e18 0%,#101209 100%);}
+.wfeed .wfeed-hdr{width:100%;}
+.feed-monitor{position:relative;line-height:0;border:3px solid #2b2f23;border-radius:6px;overflow:hidden;background:#05070a;
+  box-shadow:inset 0 0 16px rgba(0,0,0,.85), 0 0 0 1px rgba(0,0,0,.6), 0 2px 6px rgba(0,0,0,.5);}
+.feed-monitor #feed{display:block;}
+/* CRT overlay on the monitor; follows the same --crtS strength + on/off as the main screen */
+.feed-crt{position:absolute;inset:0;z-index:3;pointer-events:none;overflow:hidden;opacity:var(--crtS,0.9);}
+.feed-crt::before{content:'';position:absolute;inset:0;background:linear-gradient(rgba(18,16,16,0) 44%,rgba(0,0,0,.5) 56%),linear-gradient(90deg,rgba(255,0,0,.07),rgba(0,255,0,.035),rgba(0,0,255,.07));background-size:100% 3px,6px 100%;}
+.feed-crt::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 94% 90% at center,transparent 54%,rgba(0,0,0,.42) 100%);box-shadow:inset 0 0 22px 6px rgba(0,0,0,.45);}
+html.crt-off .feed-crt{display:none;}
+.shippill{flex:1 1 0;min-width:0;box-sizing:border-box;position:relative;border-right:1px solid rgba(255,255,255,.08);background:radial-gradient(120% 100% at 50% 28%,#15180f 0%,#080906 75%);overflow:hidden;}
+.shippill canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:pointer;}
+.bbar.ship .cpan{display:none;}
+.bbar:not(.ship) .wfeed{display:none;}
+/* RESIZE HANDLES */
+.fdrag-h{position:absolute;top:-3px;left:0;right:0;height:7px;cursor:ns-resize;z-index:40;}
+.fdrag-h:hover,.fdrag-h.drag{background:var(--cg);}
+.fdrag-v{position:absolute;top:0;bottom:0;left:0;width:7px;cursor:col-resize;z-index:40;}
+.fdrag-v:hover,.fdrag-v.drag{background:var(--cg);}
+/* FOOTER LEFT — swaps between the live feed (Ship Utilities) and quick shortcuts (Wasteland) */
+.footer-left{display:flex;border-right:1px solid rgba(255,255,255,.08);overflow:hidden;}
+/* WASTELAND FEED — live view-only mirror of the gameplay canvas (auto-sized to its aspect) */
+.wfeed{position:relative;display:flex;flex-direction:column;cursor:pointer;overflow:hidden;}
+.wfeed-hdr{display:flex;justify-content:space-between;align-items:center;font-family:'Share Tech Mono',monospace;font-size:.62rem;letter-spacing:2px;color:var(--dim);padding:5px 10px 4px;text-transform:uppercase;flex-shrink:0;}
+.wfeed-live{color:var(--red);letter-spacing:1px;animation:blink 1.4s infinite alternate;}
+.wfeed:hover .wfeed-hdr{color:var(--bright);}
+.wfeed:hover{box-shadow:inset 0 0 0 1px var(--bdr2);}
+#feed{display:block;background:#05070a;}
+/* QUICK ACCESS — direct utility shortcuts shown while on the Wasteland screen */
+.qshort{display:flex;flex-direction:column;overflow:hidden;}
+.qgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;padding:4px 10px 8px;align-content:start;flex:1;overflow-y:auto;}
+.qbtn{display:flex;align-items:center;gap:7px;background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(0,0,0,.15));border:1px solid rgba(255,255,255,.12);border-top-color:rgba(255,255,255,.2);border-radius:5px;color:var(--dim);font-family:'Share Tech Mono',monospace;font-size:.66rem;letter-spacing:1px;text-transform:uppercase;padding:7px 9px;cursor:pointer;transition:all .2s;white-space:nowrap;}
+.qbtn:hover{border-color:var(--bdr2);color:var(--bright);background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(0,0,0,.12));}
+.qbtn .qi{font-size:1rem;line-height:1;}
+/* AUX — expedition telemetry (relocated off the game canvas) */
+.aux{position:relative;border-left:1px solid rgba(255,255,255,.08);border-right:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;padding:7px 11px 9px;overflow:hidden;}
+.aux-hdr{font-family:'Share Tech Mono',monospace;font-size:.62rem;letter-spacing:2px;color:var(--dim);text-transform:uppercase;margin-bottom:7px;}
+.aux-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;flex-shrink:0;}
+.astat{background:rgba(255,255,255,.025);border:1px solid var(--bdr);border-radius:4px;padding:5px 9px;display:flex;flex-direction:column;gap:2px;}
+.astat .al{font-family:'Share Tech Mono',monospace;font-size:.6rem;letter-spacing:1px;color:var(--dim);text-transform:uppercase;}
+.astat .av{font-family:'Share Tech Mono',monospace;font-size:.92rem;color:var(--cyan);text-shadow:0 0 6px var(--cg);}
+.aux-run-hdr{font-family:'Share Tech Mono',monospace;font-size:.6rem;letter-spacing:1px;color:var(--dim);text-transform:uppercase;margin:8px 0 4px;}
+.aux-run{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:2px;font-family:'Share Tech Mono',monospace;font-size:.74rem;color:var(--green);}
+.cpan{display:flex;flex-direction:column;height:100%;padding:7px 11px 9px;overflow:hidden;}
+.chdr{display:flex;justify-content:space-between;align-items:center;font-family:'Share Tech Mono',monospace;font-size:.68rem;color:var(--dim);margin-bottom:5px;}
+.clr{background:transparent;border:none;color:var(--dim);font-family:'Share Tech Mono',monospace;font-size:.68rem;cursor:pointer;}
+.clr:hover{color:var(--red);}
+.cbody{background:#070708;border:1px solid rgba(255,255,255,.05);border-radius:3px;flex-grow:1;padding:6px;overflow-y:auto;font-family:'Share Tech Mono',monospace;font-size:.72rem;color:#b4b9bf;display:flex;flex-direction:column;gap:2px;}
+.cbody::-webkit-scrollbar,.arcv::-webkit-scrollbar{width:4px;}
+.cbody::-webkit-scrollbar-thumb,.arcv::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:2px;}
+.ll{line-height:1.3;}
+.sl{color:var(--dim);}.el{color:var(--cyan);}.hl{color:var(--amber);}.dl{color:var(--red);}.xl{color:var(--green);}
+.ectr{border-left:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;justify-content:center;padding:11px;gap:8px;}
+.gauges{display:flex;flex-direction:column;gap:6px;margin-bottom:4px;}
+.cbtn{font-family:'Share Tech Mono',monospace;font-size:.86rem;padding:10px;border-radius:4px;cursor:pointer;letter-spacing:1.5px;transition:all .25s;border:1px solid transparent;}
+.dep{background:rgba(57,230,91,.1);border-color:var(--green);color:var(--green);}
+.dep:hover:not(:disabled){background:var(--green);color:#000;}
+.rec{background:rgba(255,170,0,.1);border-color:var(--amber);color:var(--amber);}
+.rec:hover:not(:disabled){background:var(--amber);color:#000;}
+.cbtn:disabled{background:rgba(255,255,255,.02)!important;border-color:rgba(255,255,255,.05)!important;color:rgba(255,255,255,.12)!important;cursor:not-allowed!important;}
+.ct{color:var(--cyan)!important;}.gt{color:var(--green)!important;}.at{color:var(--amber)!important;}
+.hidden{display:none!important;}
+/* HANGAR — material bank banner */
+.bank{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(0,0,0,.15));border:1px solid var(--bdr);border-radius:6px;padding:9px 12px;margin-bottom:12px;}
+.bank-ttl{font-family:'Share Tech Mono',monospace;font-size:.62rem;letter-spacing:2px;color:var(--dim);text-transform:uppercase;margin-right:4px;}
+.bank-pill{font-family:'Share Tech Mono',monospace;font-size:.74rem;color:var(--dim);display:flex;align-items:center;gap:5px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.06);border-radius:3px;padding:3px 9px;}
+.bank-pill b{color:var(--bright);}
+.bank-dot{width:8px;height:8px;border-radius:50%;display:inline-block;box-shadow:0 0 5px currentColor;}
+.bank-total{margin-left:auto;border-color:var(--bdr2);background:rgba(185,196,204,.08);color:var(--cyan);}
+.bank-total b{color:var(--cyan);}
+/* In-game THIS RUN — collapsible vertical cargo list */
+.trtoggle{cursor:pointer;user-select:none;}
+.trtoggle:hover{color:var(--bright);}
+.trlist{display:flex;flex-direction:column;gap:2px;margin-top:6px;font-family:'Share Tech Mono',monospace;font-size:.76rem;color:var(--green);max-height:240px;overflow-y:auto;}
+.trline{display:flex;justify-content:space-between;gap:14px;}
+.trbox.min .trlist{display:none;}
+/* Weyland hazard-stripe accent beneath the header */
+.hdr{position:relative;}
+.hdr::after{content:'';position:absolute;left:0;right:0;bottom:-2px;height:3px;opacity:.5;background:repeating-linear-gradient(45deg,var(--hazard) 0 10px,#0a0a0b 10px 20px);}
+/* ── ONBOARDING: highlight pulse + gauge glow + in-field banner ── */
+@keyframes tutpulse{0%,100%{box-shadow:0 0 0 0 rgba(95,207,107,.0), 0 0 0 0 rgba(95,207,107,.5);transform:scale(1);}50%{box-shadow:0 0 26px 7px rgba(95,207,107,.9), 0 0 0 2px rgba(95,207,107,.7);transform:scale(1.045);}}
+.tut-pulse{animation:tutpulse 1s ease-in-out infinite;border-color:#7dff8e!important;color:#d6ffdb!important;position:relative;z-index:3;}
+@keyframes tutglow{0%,100%{box-shadow:0 0 4px rgba(70,232,255,.3);}50%{box-shadow:0 0 16px 4px rgba(70,232,255,.85);}}
+.tut-glow{animation:tutglow 1s ease-in-out infinite;border-radius:5px;border-color:#46e8ff!important;}
+/* Thruster gauge: clickable + pulses green when boost is available */
+#thrgauge{cursor:pointer;transition:border-color .2s,box-shadow .2s;}
+#thrgauge:hover{border-color:#5fcf6b;}
+@keyframes thrpulse{0%,100%{box-shadow:0 0 4px rgba(95,207,107,.25);border-color:rgba(95,207,107,.5);}50%{box-shadow:0 0 14px 3px rgba(95,207,107,.8);border-color:#5fcf6b;}}
+#thrgauge.thr-ready{animation:thrpulse 1.15s ease-in-out infinite;}
+.tut{position:absolute;top:18px;left:50%;transform:translateX(-50%);font-family:'Share Tech Mono',monospace;font-size:.84rem;color:#d4f4ff;background:rgba(8,16,20,.86);padding:9px 20px;border-radius:5px;border:1px solid var(--cyan);letter-spacing:1px;z-index:6;box-shadow:0 0 16px rgba(70,232,255,.3);text-align:center;pointer-events:none;animation:blink 1.3s infinite alternate;max-width:92%;}
+/* steady OBJECTIVE state (no blink) — the persistent "what to do now" compass, distinct from a transient hint */
+.tut.tut-obj{animation:none;color:#dfe8cc;background:rgba(12,14,8,.82);border-color:rgba(202,160,51,.55);box-shadow:0 0 12px rgba(202,160,51,.16);}
+.tut.hidden{display:none!important;}
+/* ── TUTORIAL LOCK OVERLAY (Refinery / Hangar gates) ── */
+.tut-lock{position:absolute;inset:0;z-index:8;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:30px;background:linear-gradient(rgba(6,10,14,.93),rgba(4,7,10,.97));border-radius:0 0 6px 6px;}
+.tut-lock.hidden{display:none!important;}
+.tut-lock .tl-icon{font-size:2.4rem;filter:grayscale(.3);opacity:.85;}
+.tut-lock h2{font-family:'Share Tech Mono',monospace;font-size:1.05rem;letter-spacing:2px;color:var(--cyan);margin:0;}
+.tut-lock p{font-family:'Share Tech Mono',monospace;font-size:.78rem;color:var(--dim);max-width:430px;line-height:1.5;margin:0;}
+.tut-lock .tl-cost{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;font-family:'Share Tech Mono',monospace;font-size:.76rem;}
+.tut-lock .tl-cost span{padding:4px 10px;border:1px solid var(--bdr);border-radius:4px;background:rgba(0,0,0,.3);}
+.tut-lock .tl-cost span.short{color:#e0533b;border-color:rgba(224,83,59,.5);}
+.tut-lock .tl-cost b{color:#fff;}
+.tut-lock .tl-btn{font-family:'Share Tech Mono',monospace;font-size:.9rem;letter-spacing:2px;padding:11px 28px;border:1px solid var(--green);border-radius:5px;background:rgba(95,207,107,.1);color:var(--green);cursor:pointer;transition:background .15s;}
+.tut-lock .tl-btn:hover:not(:disabled){background:rgba(95,207,107,.24);}
+.tut-lock .tl-btn:disabled{opacity:.4;cursor:not-allowed;}
+/* ── HANGAR BUY-QUANTITY SELECTOR ── */
+.buymode{display:flex;align-items:center;gap:6px;margin-bottom:14px;}
+.buymode .bm-lbl{font-family:'Share Tech Mono',monospace;font-size:.68rem;letter-spacing:2px;color:var(--dim);margin-right:4px;}
+.bm-btn{font-family:'Share Tech Mono',monospace;font-size:.74rem;letter-spacing:1px;padding:5px 12px;border:1px solid var(--bdr);border-radius:4px;background:rgba(0,0,0,.25);color:var(--dim);cursor:pointer;transition:all .12s;}
+.bm-btn:hover{color:#cfe6d2;border-color:rgba(95,207,107,.4);}
+.bm-btn.active{color:var(--green);border-color:var(--green);background:rgba(95,207,107,.12);}
+/* ── TITLE / LANDING SCREEN ── */
+.title-screen{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;background:#05070a;overflow:hidden;transition:opacity .8s ease,transform .8s ease;}
+.title-screen.fading{opacity:0;transform:scale(1.06);pointer-events:none;}
+.title-screen.hidden{display:none!important;}
+#titlebg{position:absolute;inset:0;width:100%;height:100%;display:block;}
+.title-veil{position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(5,8,12,.28) 0%,rgba(5,8,12,.7) 62%,rgba(5,8,12,.96) 100%);}
+.title-veil::after{content:'';position:absolute;left:0;right:0;bottom:0;height:4px;opacity:.55;background:repeating-linear-gradient(45deg,var(--hazard) 0 12px,#0a0a0b 12px 24px);}
+.title-inner{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;padding:24px;}
+.title-tag{font-family:'Share Tech Mono',monospace;font-size:clamp(.55rem,1.3vw,.78rem);letter-spacing:.32em;color:var(--hazard);opacity:.8;text-transform:uppercase;}
+.title-logo{font-family:'Share Tech Mono',monospace;font-weight:400;font-size:clamp(3rem,12vw,8.5rem);line-height:1;letter-spacing:.16em;color:var(--cyan);text-shadow:0 0 26px rgba(185,196,204,.5),0 0 64px rgba(95,207,107,.28);margin:0;}
+.title-sub{font-family:'Share Tech Mono',monospace;font-size:clamp(.7rem,1.7vw,1rem);letter-spacing:.34em;color:var(--dim);text-transform:uppercase;}
+.title-start{margin-top:18px;font-family:'Share Tech Mono',monospace;font-size:1.15rem;letter-spacing:3px;padding:15px 50px;color:var(--green);background:rgba(57,230,91,.08);border:1px solid var(--green);border-radius:4px;cursor:pointer;transition:background .25s,color .25s,box-shadow .25s;animation:tutpulse 1.7s ease-in-out infinite;}
+.title-start:hover{background:var(--green);color:#000;box-shadow:0 0 30px rgba(95,207,107,.6);}
+.title-hint{font-family:'Share Tech Mono',monospace;font-size:.72rem;color:var(--dim);letter-spacing:1.5px;margin-top:10px;max-width:520px;line-height:1.6;}
+.title-hint em{color:var(--bright);font-style:normal;}
+</style>
+</head>
+<body>
+<div class="app">
+<!-- HEADER -->
+<header class="hdr">
+  <div class="hdl"><div class="dot"></div><h1>ROVERHAUL_OS v0.8</h1></div>
+  <div class="vtog">
+    <button id="bvw" class="vbtn active"><span class="pls"></span> WASTELAND</button>
+    <button id="bvb" class="vbtn">SHIP UTILITIES</button>
+  </div>
+  <div class="hdr-right" style="display:flex;align-items:center;gap:18px;">
+    <button id="bopt" class="vbtn" title="Options">⚙ OPTIONS</button>
+    <div style="font-family:'Share Tech Mono',monospace;color:var(--dim);font-size:.9rem;">UPTIME: <span id="tu">00:00:00</span></div>
+  </div>
+</header>
+
+<!-- OPTIONS MODAL -->
+<div id="optModal" class="opt-modal hidden">
+  <div class="opt-box">
+    <div class="opt-top"><span>OPTIONS</span><button id="opt-close" class="opt-x">✕</button></div>
+    <div class="opt-row"><label>Sound</label><button id="bsnd" class="opt-tg active" title="Toggle sound">🔊 SOUND</button></div>
+    <div class="opt-row"><label>Ambient Music</label><button id="bmus" class="opt-tg active" title="Toggle ambient music">🎵 ON</button></div>
+    <div class="opt-row"><label>Music Volume</label><input id="mus-vol" type="range" min="0" max="100" value="28"><span class="opt-val" id="mus-vol-val">28%</span></div>
+    <div class="opt-row"><label>Isometric View <span style="opacity:.6;font-size:.8em">(WIP)</span></label><button id="biso" class="opt-tg active" title="Render the biome-1 field in the new isometric view">🟦 ON</button></div>
+    <div class="opt-row"><label>CRT Screen Effect</label><button id="bcrt" class="opt-tg active" title="Toggle CRT effect">📺 ON</button></div>
+    <div class="opt-row"><label>CRT Strength</label><input id="crt-strength" type="range" min="0" max="100" value="90"><span class="opt-val" id="crt-strength-val">90%</span></div>
+    <div class="opt-row"><label>Save Data <span style="opacity:.6;font-size:.8em">(backup)</span></label>
+      <span style="display:flex;gap:8px;">
+        <button id="opt-export" class="opt-tg" title="Download your progress as a backup file">⭳ EXPORT</button>
+        <button id="opt-import" class="opt-tg" title="Load a backup file — replaces current progress">⭱ IMPORT</button>
+      </span>
+    </div>
+    <input id="opt-import-file" type="file" accept="application/json,.json,.txt" style="display:none;">
+  </div>
+</div>
+
+<!-- DAILY SUPPLY DROP MODAL -->
+<div id="dailyModal" class="opt-modal hidden">
+  <div class="opt-box">
+    <div class="opt-top"><span>◆ DAILY SUPPLY DROP</span><button id="daily-close" class="opt-x">✕</button></div>
+    <div id="daily-summary" style="font-family:'Share Tech Mono',monospace;color:var(--dim);font-size:.82rem;padding:6px 18px 0;line-height:1.5;"></div>
+    <div id="daily-list" style="padding:8px 18px 14px;"></div>
+    <div style="padding:0 18px 16px;"><button id="daily-collect" class="opt-tg active" style="width:100%;">COLLECT</button></div>
+  </div>
+</div>
+
+<!-- WHILE YOU WERE AWAY MODAL -->
+<div id="awayModal" class="opt-modal hidden">
+  <div class="opt-box">
+    <div class="opt-top"><span>◷ WHILE YOU WERE AWAY</span><button id="away-close" class="opt-x">✕</button></div>
+    <div id="away-summary" style="font-family:'Share Tech Mono',monospace;color:var(--dim);font-size:.82rem;padding:6px 18px 0;line-height:1.5;"></div>
+    <div id="away-list" style="padding:8px 18px 14px;"></div>
+    <div style="padding:0 18px 16px;"><button id="away-collect" class="opt-tg active" style="width:100%;">COLLECT</button></div>
+  </div>
+</div>
+
+<!-- PRESTIGE WALKTHROUGH MODAL (first time a jettison would pay off) -->
+<div id="prestigeIntro" class="opt-modal hidden">
+  <div class="opt-box">
+    <div class="opt-top"><span>✦ JETTISON — THE PRESTIGE LOOP</span><button id="pri-close" class="opt-x">✕</button></div>
+    <div style="font-family:'Share Tech Mono',monospace;color:var(--dim);font-size:.82rem;padding:10px 18px 4px;line-height:1.6;">
+      You've reached the <b style="color:#dfe8cc;">Hollow Core</b>. You can now <b style="color:#ffd9a0;">JETTISON</b> — prestige.
+      <br><br>
+      <b style="color:#dfe8cc;">What it does:</b> resets this cycle — inventory, Hangar upgrades, research and biome — and banks <b style="color:#ffd9a0;">CORES</b> (≈ <span id="pri-cores">0</span> right now).<br>
+      <b style="color:#dfe8cc;">You keep:</b> Cores, the Core tree, Mastery, Archives, Achievements.<br>
+      <b style="color:#dfe8cc;">Cores buy:</b> permanent boosts — yield, drill, speed, cheaper rebuilds, shorter descents, and <b>HEAD START</b> (re-enter already breached deeper).<br>
+      <b style="color:#dfe8cc;">Why:</b> each cycle gets faster. This is the long game — reset to go further.
+    </div>
+    <div style="display:flex;gap:10px;padding:12px 18px 16px;">
+      <button id="pri-jettison" class="opt-tg active" style="flex:1;">JETTISON NOW</button>
+      <button id="pri-later" class="opt-tg" style="flex:1;">NOT YET</button>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<main class="mon">
+
+<!-- IN-ROOM TERMINAL OVERLAY — the footer TERMINAL (#cpan) is reparented here when toggled from the bay console -->
+<div id="term-overlay">
+  <div class="term-frame">
+    <div class="term-bar"><span>SHIP TERMINAL</span><button id="term-close" title="Close terminal">✕</button></div>
+    <div class="term-body"></div>
+  </div>
+</div>
+
+<!-- Floating game controls (Deploy / Recall / Descend) — .ectr is reparented here from the old footer -->
+<div class="gamebar" id="gamebar"></div>
+
+<!-- WASTELAND SCREEN -->
+<section id="sw" class="sv active">
+  <!-- POWER + THRUSTER gauges — vertical, BESIDE the game window (left), framing it opposite the resources panel -->
+  <div class="sidegauges" id="sidegauges">
+    <div class="vgauge"><div class="vg-lbl">CORE</div><div class="vg-track"><div id="pbf" class="vg-fill"></div></div><div class="vg-val" id="hp">100%</div></div>
+    <div class="vgauge" id="thrgauge" title="Thrusters — SPACE / click to boost"><div class="vg-lbl">THR</div><div class="vg-track"><div id="bbf" class="vg-fill bst"></div></div><div class="vg-val" id="hbst">RDY</div></div>
+  </div>
+  <div class="cwrap">
+    <canvas id="gc"></canvas>
+    <div class="hudl hst"><div class="hst-txt" id="hstat">STANDBY</div></div>
+    <div id="acp" class="hint hidden">[ HOSTILE DETECTED — CLICK ANYWHERE TO FIRE TURRET ]</div>
+    <div id="tut" class="tut hidden"></div>
+    <div id="crtfx" aria-hidden="true"><div class="crt-scan"></div><div class="crt-bleed"></div><div class="crt-sweep"></div><div class="crt-static"></div><div class="crt-vignette"></div><div class="crt-bezel"></div></div>
+  </div>
+  <!-- RIGHT COLUMN beside the game window: expedition telemetry on top, resources-this-run below -->
+  <div class="rightcol">
+    <div class="aux" id="aux">
+      <div class="aux-hdr">EXPEDITION TELEMETRY</div>
+      <div class="aux-grid">
+        <div class="astat"><span class="al">Status</span><span class="av" id="ax-status">STANDBY</span></div>
+        <div class="astat"><span class="al">Elapsed</span><span class="av" id="ax-elapsed">00:00:00</span></div>
+        <div class="astat"><span class="al">Distance</span><span class="av" id="ax-dist">0.0 m</span></div>
+        <div class="astat"><span class="al">Speed</span><span class="av" id="ax-speed">—</span></div>
+        <div class="astat"><span class="al">Total travelled</span><span class="av" id="ax-total">0 m</span></div>
+        <div class="astat"><span class="al">Biome</span><span class="av" id="ax-biome" style="font-size:.78rem;">—</span></div>
+        <div class="astat" id="ax-yield-box" title="Expected resources per run at current rover stats"><span class="al">Yield / run</span><span class="av" id="ax-yield" style="font-size:.82rem;">—</span></div>
+        <div class="astat"><span class="al">Automation</span><span class="av" id="ax-auto" style="font-size:.74rem;">—</span></div>
+      </div>
+    </div>
+    <div class="runres" id="runres"><div class="runres-hdr">RESOURCES THIS RUN</div><div class="runres-list" id="runres-list">—</div></div>
+  </div>
+</section>
+
+<!-- BASE OPS SCREEN -->
+<section id="sb" class="sv deck-mode">
+  <!-- SHIP CROSS-SECTION (landing view; click a compartment to enter a facility) -->
+  <div id="deckmap">
+    <div class="deckmap-hdr">
+      <div class="deckmap-title">EXTRACTION VESSEL <span>// RH-077 AURORA</span></div>
+      <div class="deckmap-stats">
+        <span>CREW 11</span><span>CARGO 800T</span><span>UTILITY ×24</span><span>HULL <b id="deckmap-hull">NOMINAL</b></span>
+      </div>
+    </div>
+    <div class="deckmap-stage"><canvas id="deckmap-canvas"></canvas></div>
+    <div class="deckmap-foot"><span id="deckmap-label">SELECT A COMPARTMENT</span></div>
+  </div>
+  <!-- Hub buttons -->
+  <div class="base-hub">
+    <button class="hub-btn deck-back" data-deckback="1">
+      <span class="hub-icon">◀</span>SHIP
+    </button>
+    <button class="hub-btn active" data-panel="pca">
+      <span class="hub-icon">📦</span>CARGO BAY
+    </button>
+    <button class="hub-btn" data-panel="prf">
+      <span class="hub-icon">🔩</span>REFINERY
+    </button>
+    <button class="hub-btn" data-panel="paf">
+      <span class="hub-icon">⚗️</span>ALLOY FORGE
+    </button>
+    <button class="hub-btn" data-panel="ph">
+      <span class="hub-icon">🛠</span>ROVER HANGAR
+    </button>
+    <button class="hub-btn" data-panel="par">
+      <span class="hub-icon">📖</span>ARCHIVES
+    </button>
+    <button class="hub-btn" data-panel="pob">
+      <span class="hub-icon">🎯</span>OBJECTIVES
+    </button>
+    <button class="hub-btn" data-panel="ptr">
+      <span class="hub-icon">🧬</span>RESEARCH
+    </button>
+    <button class="hub-btn" data-panel="ppr">
+      <span class="hub-icon">✦</span>PRESTIGE
+    </button>
+    <button class="hub-btn dev-hub" data-panel="pdv">
+      <span class="hub-icon">⚙️</span>DEV TOOLS
+    </button>
+  </div>
+
+  <!-- Panels -->
+  <div class="base-panel-wrap">
+    <button id="dock-exit" title="Back to the room">✕ ROOM</button>
+
+    <!-- HANGAR -->
+    <div class="bpanel" id="ph">
+      <div class="tut-lock hidden" id="ph-lock"></div>
+      <div class="bank" id="hangar-bank"></div>
+      <p style="font-family:'Share Tech Mono',monospace;font-size:.76rem;color:var(--dim);margin-bottom:12px;">Upgrades available in STANDBY only. Early levels cost refined metals; higher levels cost forged alloys.</p>
+      <div class="buymode" id="buymode">
+        <span class="bm-lbl">BUY QTY</span>
+        <button class="bm-btn active" data-mode="1">×1</button>
+        <button class="bm-btn" data-mode="5">×5</button>
+        <button class="bm-btn" data-mode="10">×10</button>
+        <button class="bm-btn" data-mode="max">MAX</button>
+      </div>
+      <div class="grid4" id="hangar-grid"></div>
+    </div>
+
+    <!-- CARGO BAY -->
+    <div class="bpanel active" id="pca"><div id="cargo-content"></div></div>
+
+    <!-- ALLOY FORGE -->
+    <div class="bpanel" id="paf">
+      <p style="font-size:.8rem;color:var(--dim);margin-bottom:14px;">Pick the alloy you want to forge — its required materials and how many you can make are shown automatically. Recipes are defined in Dev Tools.</p>
+      <div class="forge-craft">
+        <div class="forge-panel">
+          <h3>CRAFT ALLOY</h3>
+          <select id="fg-alloy" class="fsel"></select>
+          <div class="fres" id="fg-out">Select an alloy</div>
+          <div class="fqty" id="fg-out-qty"></div>
+        </div>
+        <div class="forge-panel">
+          <h3>REQUIRES</h3>
+          <div id="fg-reqs" class="fg-reqs">—</div>
+          <div class="buymode" id="forgemode" style="justify-content:center;margin:8px 0;">
+            <span class="bm-lbl">QTY</span>
+            <button class="bm-btn active" data-mode="1">×1</button>
+            <button class="bm-btn" data-mode="5">×5</button>
+            <button class="bm-btn" data-mode="10">×10</button>
+            <button class="bm-btn" data-mode="50">×50</button>
+            <button class="bm-btn" data-mode="max">MAX</button>
+          </div>
+          <button class="fbtn" id="fg-btn" disabled>FORGE</button>
+        </div>
+      </div>
+      <div style="border-top:1px solid rgba(255,255,255,.07);padding-top:12px;">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:.68rem;letter-spacing:2px;color:var(--dim);margin-bottom:8px;">KNOWN RECIPES</div>
+        <table class="alloy-tbl"><thead><tr><th>ALLOY</th><th>INPUT A</th><th>INPUT B</th><th>QTY A</th><th>QTY B</th><th>YIELDS</th></tr></thead><tbody id="alloy-tbody"></tbody></table>
+      </div>
+    </div>
+
+    <!-- REFINERY -->
+    <div class="bpanel" id="prf">
+      <div class="tut-lock hidden" id="prf-lock"></div>
+      <div class="refgrid" id="ref-content"></div>
+      <div class="autosec">
+        <h2>AUTOMATION</h2>
+        <div style="height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;margin-bottom:10px;"><div id="auto-prog" style="height:100%;width:0%;background:linear-gradient(90deg,#3a7a3e,#5fcf6b);transition:width .12s linear;"></div></div>
+        <div class="autogrid">
+          <div class="autocard"><div><h4>Auto-Refinery</h4><p>Smelt raw metals each cycle. <span id="lam">Disabled</span></p></div><button class="sbtn" id="bam">Buy: 5 Bio-Fuel</button></div>
+          <div class="autocard"><div><h4>Auto-Reclaimer</h4><p>Process biomass each cycle. <span id="lab">Disabled</span></p></div><button class="sbtn" id="bab">Buy: 5 Bio-Fuel</button></div>
+          <div class="autocard"><div><h4>Refinery Speed</h4><p>Cycle time: <span id="lasp">5.0s</span></p></div><button class="sbtn" id="basp">Buy: 8 Bio-Fuel</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ARCHIVES -->
+    <div class="bpanel" id="par">
+      <div class="arclay">
+        <div class="arcside">
+          <ul class="arclist" id="arclist"><!-- built from window.ARCHIVES by buildArchives() --></ul>
+        </div>
+        <div class="arcv" id="arcv"><!-- built from window.ARCHIVES by buildArchives() --></div>
+      </div>
+    </div>
+
+    <!-- RESEARCH (tech tree) -->
+    <div class="bpanel" id="ptr">
+      <div class="ach-hdr-row">
+        <p style="font-family:'Share Tech Mono',monospace;font-size:.76rem;color:var(--dim);margin:0;">Research breaches and systems. Unlock a biome here, then <b style="color:var(--cyan)">DESCEND</b> to it mid-expedition.</p>
+        <span class="ach-count" id="tr-count">0 / 0</span>
+      </div>
+      <div class="ach-grid" id="tr-grid"><!-- built from window.TECHTREE by buildResearch() --></div>
+    </div>
+
+    <!-- PRESTIGE (Jettison / Core tree) -->
+    <div class="bpanel" id="ppr">
+      <div class="ach-hdr-row">
+        <p style="font-family:'Share Tech Mono',monospace;font-size:.76rem;color:var(--dim);margin:0;max-width:62%;">Reach the <b style="color:var(--cyan)">Hollow Core</b>, then <b style="color:#ffcf7a">JETTISON</b> to reset the cycle for <b style="color:#ffcf7a">CORES</b> — spent here on permanent bonuses. Each cycle gets faster.</p>
+        <span class="ach-count" id="pr-cores">✦ 0 CORES</span>
+      </div>
+      <div id="pr-jettison-row" style="display:flex;align-items:center;gap:14px;margin:6px 0 12px;padding:10px 14px;border:1px solid rgba(255,207,122,.28);border-radius:8px;background:linear-gradient(180deg,rgba(255,207,122,.06),rgba(0,0,0,.15));">
+        <button id="pr-jettison" class="cbtn" style="background:linear-gradient(180deg,#caa24a,#8a6a24);min-width:150px;">JETTISON</button>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:.72rem;color:var(--dim);line-height:1.5;">
+          <span id="pr-jet-info">Reach the Hollow Core to enable a jettison.</span><br>
+          <span style="color:var(--dim)">Jettisons: <b id="pr-count" style="color:var(--ink,#cdd6bf)">0</b> · lifetime cores <b id="pr-total" style="color:var(--ink,#cdd6bf)">0</b></span>
+        </div>
+      </div>
+      <div class="ach-grid" id="pr-grid"><!-- built from PRESTIGE_TREE by buildPrestige() --></div>
+    </div>
+
+    <!-- OBJECTIVES -->
+    <div class="bpanel" id="pob">
+      <div class="ach-hdr-row">
+        <p style="font-family:'Share Tech Mono',monospace;font-size:.76rem;color:var(--dim);margin:0;">Goals that track your progress. Some grant a one-time supply reward on completion.</p>
+        <span class="ach-count" id="ach-count">0 / 0</span>
+      </div>
+      <div class="ach-grid" id="ach-grid"><!-- built from window.ACHIEVEMENTS by buildAchievements() --></div>
+    </div>
+
+    <!-- DEV TOOLS -->
+    <div class="bpanel dev-panel" id="pdv">
+      <div class="dw">⚠ DEV MODE — All changes apply live and persist to save data.</div>
+
+      <div class="dsect">Biome 4 — Monochrome Render</div>
+      <p style="font-size:.74rem;color:#8db87a;margin-bottom:8px;">Live 1-bit dither / lighting tuning. NOT saved (code defaults) — hit "Copy values" when happy and bake them in. "Preview B4 here" forces the pass on in any biome.</p>
+      <div id="d-b4-wrap"></div>
+
+      <div class="dsect">Game Config</div>
+      <div id="d-cfg-wrap"></div>
+
+      <div class="dsect">Resource Node Table</div>
+      <p style="font-size:.74rem;color:#8db87a;margin-bottom:8px;">Each row = one node. drillTime 0 = output-only (not gatherable). weight 0 = disabled spawn.</p>
+      <button class="dadd" id="d-add-res">+ Add Resource</button>
+      <div id="d-res-wrap" style="overflow-x:auto;"></div>
+
+      <div class="dsect">Alloy Recipe Editor</div>
+      <p style="font-size:.74rem;color:#8db87a;margin-bottom:8px;">All three IDs must exist in the Resource table above.</p>
+      <button class="dadd" id="d-add-alloy">+ Add Recipe</button>
+      <div id="d-alloy-wrap" style="overflow-x:auto;"></div>
+
+      <div class="dsect">Feature Toggles</div>
+      <div class="dgrow"><button class="dapp" id="d-toggle-forge">Alloy Forge Tab</button><span id="d-forge-state" style="color:#8db87a;font-size:.74rem;"></span></div>
+      <div class="dgrow"><button class="dapp" id="d-reset-tut">Reset Tutorial (relock Refinery/Hangar)</button><span style="color:#8db87a;font-size:.74rem;">re-runs the onboarding loop on this save</span></div>
+      <div class="dgrow"><button class="dapp" id="d-sim-offline">Simulate +1h Offline</button><span style="color:#8db87a;font-size:.74rem;">backdates lastSeen 1h and applies offline progress</span></div>
+      <div class="dgrow"><button class="dapp" id="d-hard-reset" style="border-color:#e0533b;color:#f3a596;">⚠ Hard Reset (wipe save)</button><span style="color:#e0a090;font-size:.74rem;">erases ALL progress &amp; starts a brand-new game from the title — keeps options/settings</span></div>
+
+      <div class="dsect">Biomes (Travel)</div>
+      <p style="font-size:.74rem;color:#8db87a;margin-bottom:8px;">First-pass biomes — jump straight to one to test pacing/visuals. Changes the spawn pool + scene live (works mid-expedition).</p>
+      <div class="dgrow" id="d-biomes"></div>
+
+      <div class="dsect">Upgrade Config &amp; Cost Curve</div>
+      <p style="font-size:.74rem;color:#8db87a;margin-bottom:8px;">BASE &amp; GROWTH drive the geometric cost (qty = base·growth^(lvl−1)). Edit live to tune the whole curve; persists to save. Preview pacing with <b>tools/econ_sim.py</b>.</p>
+      <div id="d-upg-wrap"></div>
+
+      <div class="dsect">Biome Breach Gates (pacing)</div>
+      <p style="font-size:.74rem;color:#8db87a;margin-bottom:8px;">Material costs + upgrade-level requirements that gate each descent — the primary biome-pacing levers. Tip: lower the <i>material</i> cost to soften a wall; the <i>requirements</i> force rover-building (lowering them too far can balloon later biomes).</p>
+      <div id="d-breach-wrap"></div>
+
+      <div class="dsect">Give Resources (Testing)</div>
+      <div class="dgrow" id="d-give"></div>
+
+      <div class="dsect">Economy Snapshot</div>
+      <pre id="d-snap" style="font-family:'Share Tech Mono',monospace;font-size:.7rem;color:#8db87a;line-height:1.7;white-space:pre-wrap;"></pre>
+    </div>
+
+  </div><!-- end base-panel-wrap -->
+</section>
+
+</main>
+
+<!-- BOTTOM BAR -->
+<footer class="bbar">
+  <div class="fdrag-h" id="fdragH" title="Drag to resize the bottom bar"></div>
+  <!-- LEFT slot: TERMINAL on the wasteland view; the LIVE CAMERA takes this position on Ship Utilities -->
+  <div class="cpan" id="cpan">
+    <div class="chdr"><span>TERMINAL</span><button class="clr" id="bclr">CLEAR</button></div>
+    <div class="cbody" id="clog"><div class="ll sl">[00:00:00] SYSTEM INITIALIZED.</div></div>
+  </div>
+  <div class="wfeed" id="wfeed" title="Click to enter the Wasteland">
+    <div class="wfeed-hdr"><span>WASTELAND FEED</span><span class="wfeed-live">● LIVE</span></div>
+    <div class="feed-monitor">
+      <canvas id="feed"></canvas>
+      <div class="feed-crt" aria-hidden="true"></div>
+    </div>
+  </div>
+  <!-- SHIP-UI pill — always present (both views); click a compartment to jump to it -->
+  <div class="shippill" id="shippill" title="Ship systems — click a compartment"><canvas id="deckpill-canvas"></canvas></div>
+  <div class="ectr">
+    <button id="bdep" class="cbtn dep">DEPLOY ROVER</button>
+    <button id="bdesc" class="cbtn cdsc" style="display:none;">DESCEND</button>
+    <button id="brec" class="cbtn rec" disabled>RECALL TO SHIP</button>
+  </div>
+</footer>
+</div><!-- end .app -->
+
+<!-- TITLE / LANDING SCREEN — shown on load; START drops into the game -->
+<div id="title" class="title-screen">
+  <canvas id="titlebg"></canvas>
+  <div class="title-veil"></div>
+  <div class="title-inner">
+    <div class="title-tag">WEYLAND-YUTANI // DERELICT SALVAGE DIVISION</div>
+    <h1 class="title-logo">ROVERHAUL</h1>
+    <div class="title-sub">SALVAGE · REFINE · UPGRADE · SURVIVE</div>
+    <button id="title-start" class="title-start">START GAME</button>
+    <div class="title-hint">Colony vessel <em>Sovereign-9</em> — hull fractured on a biomechanical world. Deploy the rover.</div>
+  </div>
+</div>
+
+
+<!-- Scripts — must load in this order -->
+<script>window.RH_RELEASE=true;</script><!-- build-release.mjs flips this to true for the public/itch build (strips Dev Tools + the 2D/iso toggle) -->
+<script src="src/data.js"></script>
+<script src="src/biomes.js"></script>
+<script src="src/techtree.js"></script>
+<script src="src/lore.js"></script>
+<script src="src/achievements.js"></script>
+<script src="src/music.js"></script>
+<script src="src/game.js"></script>
+<script src="src/iso.js"></script>
+<script src="src/scenes/colossus.js"></script>
+<script src="src/shipmap.js"></script>
+<script src="src/engine.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/ui.js"></script>
+<script src="src/rooms.js"></script>
+</body>
+</html>
